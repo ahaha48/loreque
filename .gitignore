@@ -1,0 +1,23 @@
+# メンバーデータ・バックアップ（個人情報を含むため絶対にコミットしない）
+loreque_backup_*.json
+backup_*.json
+
+# シークレット
+.env
+.env.*
+*.key
+*.pem
+credentials.json
+secrets.json
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Node
+node_modules/
+npm-debug.log*
