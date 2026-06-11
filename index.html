@@ -695,7 +695,7 @@ select option{background:var(--bg3);}
   <div class="three-col">
     <div class="stat-card gold" style="padding:16px"><div class="stat-label">未払いストック合計</div><div class="stat-value" style="font-size:24px" id="r-stock-total">¥0</div><div class="stat-delta" id="r-stock-sub"></div></div>
     <div class="stat-card teal" style="padding:16px"><div class="stat-label">支払済み累計</div><div class="stat-value" style="font-size:24px" id="r-paid-total">¥0</div><div class="stat-delta" id="r-paid-sub"></div></div>
-    <div class="stat-card blue" style="padding:16px"><div class="stat-label">今週の報酬発生</div><div class="stat-value" style="font-size:24px" id="r-week-count">0</div><div class="stat-delta">名 × ¥1,000（結果SS確認済・当選なし）</div></div>
+    <div class="stat-card blue" style="padding:16px"><div class="stat-label">今週の報酬発生</div><div class="stat-value" style="font-size:24px" id="r-week-count">0</div><div class="stat-delta">名 × ¥1,000（申込SS5店舗＋結果SS確認済・当選なし）</div></div>
   </div>
   <div class="card" style="margin-bottom:16px;">
     <div class="toolbar">
@@ -1327,7 +1327,7 @@ function renderDashboard() {
     const venue = parseInt(document.getElementById('venue-count')?.value||5);
     if (w.apply>=venue) applied++;
     if (w.won_date) winners++;
-    if (w.result_ss && !w.won_date) rewardCount++;
+    if (w.result_ss && !w.won_date && w.apply!=null && w.apply>=venue) rewardCount++;
     if (isParticipating(curMonth, curWeek, m.id)) participating++;
   });
   const activeCount = MEMBERS.filter(m=>m.priority==='1:アクティブ').length;
@@ -1426,7 +1426,7 @@ function buildWeeklyRows(filter) {
   if (f==='active')             list = list.filter(m=>calcPriority(m)==='1:アクティブ');
   else if (f==='apply_pending') list = list.filter(m=>!isRestricted(m) && getWk(curMonth,curWeek,m.id).apply==null);
   else if (f==='ss_pending')    list = list.filter(m=>!isRestricted(m) && !getWk(curMonth,curWeek,m.id).result_ss);
-  else if (f==='reward_eligible') list = list.filter(m=>{const w=getWk(curMonth,curWeek,m.id);return w.result_ss&&!w.won_date;});
+  else if (f==='reward_eligible') list = list.filter(m=>{const w=getWk(curMonth,curWeek,m.id);return w.result_ss&&!w.won_date&&w.apply!=null&&w.apply>=venue;});
   // 全員表示(all)はそのまま全件
 
   document.getElementById('weekly-count').textContent = `${list.length} 名表示中`;
@@ -1454,6 +1454,8 @@ function buildWeeklyRows(filter) {
     const ssOk = w.result_ss;
     const isWon = !!w.won_date;
     const eligible = ssOk && !isWon && m.status!=='2回当選済' && m.status!=='3回当選済';
+    // 報酬対象バッジは「全店舗申込(full)」も満たした週のみ（当選登録ボタンの活性条件 eligible とは別）
+    const rewardEligible = eligible && full;
 
     // 制限中メンバーの行（申込あり／結果あり／当選連絡あり の3ボタン）
     if (restricted) {
@@ -1542,7 +1544,7 @@ function buildWeeklyRows(filter) {
           : `<button class="won-btn ${eligible?'':'disabled'}" onclick="openWonModal(${m.id})"
               ${eligible?'':'title="結果SSが未確認または既に2回当選済み"'}>おめでとう 🎉</button>`
         }
-        ${eligible?`<span class="badge badge-gold btn-xs" style="margin-left:4px">報酬対象</span>`:''}
+        ${rewardEligible?`<span class="badge badge-gold btn-xs" style="margin-left:4px">報酬対象</span>`:''}
         ${(()=>{
           const stock = getStock(m.id);
           if (stock === 0) return '';
@@ -1934,13 +1936,14 @@ function exportMemberCSV() {
 function renderReward() {
   // サマリー
   let totalStock = 0, totalPaid = 0, weekCount = 0, stockMembers = 0;
+  const venue = parseInt(document.getElementById('venue-count')?.value||5);
   MEMBERS.forEach(m => {
     const stock = getStock(m.id);
     totalStock += stock;
     if (stock > 0) stockMembers++;
     totalPaid += getPaidTotal(m.id);
     const w = getWk(curMonth, curWeek, m.id);
-    if (w.result_ss && !w.won_date) weekCount++;
+    if (w.result_ss && !w.won_date && w.apply!=null && w.apply>=venue) weekCount++;
   });
   document.getElementById('r-stock-total').textContent = '¥'+totalStock.toLocaleString();
   document.getElementById('r-stock-sub').textContent = `${stockMembers}名分`;
@@ -1971,7 +1974,7 @@ function renderReward() {
         <td class="mono">${m.line_name}</td>
         <td>${m.name||'—'}</td>
         <td>${statusBadge(m.status)}</td>
-        <td>${m._w.result_ss&&!m._w.won_date?'<span class="badge badge-teal">+¥1,000</span>':m._w.won_date?'<span class="badge badge-gold">⭐ 当選</span>':'<span style="color:var(--text3);font-size:12px">—</span>'}</td>
+        <td>${m._w.result_ss&&!m._w.won_date&&m._w.apply!=null&&m._w.apply>=venue?'<span class="badge badge-teal">+¥1,000</span>':m._w.won_date?'<span class="badge badge-gold">⭐ 当選</span>':'<span style="color:var(--text3);font-size:12px">—</span>'}</td>
         <td style="font-family:'DM Mono',monospace;color:var(--text2)">¥${m._accrued.toLocaleString()}</td>
         <td style="font-family:'DM Mono',monospace;color:var(--teal2)">${m._paid>0?'¥'+m._paid.toLocaleString():'—'}</td>
         <td style="font-family:'DM Mono',monospace;font-weight:${m._stock>0?700:400};color:${m._stock>0?'var(--gold2)':'var(--text3)'}">¥${m._stock.toLocaleString()}</td>
@@ -2585,7 +2588,7 @@ function setupAutoBackup() {
 // ================================================================
 // ================================================================
 // 当月報酬回数カウント
-// 報酬発生条件：result_ss=true かつ won_date=null かつ（未当選 or no_purchase=true）
+// 報酬発生条件：申込SS全店舗(標準5) かつ result_ss=true かつ won_date=null かつ（未当選 or no_purchase=true）
 // ================================================================
 // 一度でも抽選申し込みをしたことがあるか判定
 // WEEKLY に apply > 0 または result_ss/won_date があれば参加経験あり
@@ -2601,12 +2604,16 @@ function hasAnyApplyHistory(memberId) {
 
 // ================================================================
 // ストック報酬計算（2期生ルール）
-// ・報酬発生週 = result_ss=true かつ won_date なし（1週 ¥1,000）
+// ・報酬発生週 = 申込SSが全店舗(標準5) かつ result_ss=true かつ won_date なし（1週 ¥1,000）
 // ・報酬対象 = 未当選の方（初当選より前の週）または no_purchase=true の方（全期間）
 // ・累積は過去実績から算出するため、当選してステータスが変わっても発生済み分は消えない
 // ・ストック残 = 累積 − 支払済（支払いは PAYMENTS に記録）
 // ・既知の制約: month は年情報を持たない（1期生と同じ）。年をまたぐ運用時は注意
 // ================================================================
+// 報酬発生に必要な申込店舗数。全店舗の申込SSが揃って初めて¥1,000。
+// 過去週は venue（5/6）を保存していないため、累積計算では固定の標準値を使う
+// （管理者が venue を一時的に6へ切り替えても過去週の報酬が遡って消えないようにするため）。
+const STD_VENUE = 5;
 function getFirstWinIdx(memberId) {
   // 同行補助モード（制限中の当選）はステータスに影響しないため除外
   let min = Infinity;
@@ -2630,6 +2637,7 @@ function getAccruedReward(memberId) {
     if (parseInt(parts[2]) !== memberId) return;
     const w = WEEKLY[key];
     if (!w || !w.result_ss || w.won_date) return;
+    if (w.apply == null || w.apply < STD_VENUE) return; // 申込SSが全店舗(標準5)ぶん揃った週のみ報酬対象（全員共通）
     if (m.no_purchase === true) { count++; return; } // 買えなかった方は全期間対象
     const weekIdx = parseInt(parts[0]) * 10 + parseInt(parts[1]);
     if (weekIdx < firstWin) count++; // 初当選より前の週のみ（当時は未当選）
