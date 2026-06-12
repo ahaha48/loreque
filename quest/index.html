@@ -175,6 +175,8 @@ body{font-family:'Noto Sans JP',sans-serif;color:var(--text);font-size:14px;min-
 .form-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:9px 11px;font-size:13px;font-family:'Noto Sans JP';outline:none;}
 .form-input:focus{border-color:var(--gold);}
 .modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+.btn-mini{padding:5px 11px;font-size:11px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:'Noto Sans JP';white-space:nowrap;}
+.btn-mini:hover{background:var(--bg3);color:var(--gold2);border-color:var(--gold);}
 
 table{width:100%;border-collapse:collapse;}
 thead th{padding:10px 9px;text-align:left;font-size:11px;color:var(--text3);letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;}
@@ -371,6 +373,57 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   </div></div>
 </div>
 
+<!-- メンバー追加モーダル -->
+<div class="modal-ov" id="modal-add-member" onclick="if(event.target===this)closeModal('modal-add-member')">
+  <div class="modal-box"><div class="modal-in">
+    <h3>👥 メンバー追加</h3>
+    <div class="modal-sub">新しい冒険者をパーティーに加えます</div>
+    <div style="margin-bottom:12px"><label class="form-label">LINE名 <span style="color:var(--red2)">*</span></label><input class="form-input" id="new-line-name" placeholder="例: Taro_123"></div>
+    <div style="margin-bottom:12px"><label class="form-label">氏名</label><input class="form-input" id="new-name" placeholder="例: 山田太郎"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="form-label">稼働状況</label><select class="form-input" id="new-priority"><option value="1:アクティブ">アクティブ</option><option value="3:非アクティブ(未当選)">非アクティブ（未当選）</option></select></div>
+      <div><label class="form-label">LINE User ID（任意）</label><input class="form-input" id="new-line-uid" placeholder="U1234...（任意）"></div>
+    </div>
+    <div style="margin-bottom:4px"><label class="form-label">備考</label><input class="form-input" id="new-note" placeholder="5店舗以下 など"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('modal-add-member')">キャンセル</button><button class="btn btn-gold" onclick="addMember()">＋ 追加</button></div>
+  </div></div>
+</div>
+
+<!-- メンバー編集モーダル -->
+<div class="modal-ov" id="modal-edit-member" onclick="if(event.target===this)closeModal('modal-edit-member')">
+  <div class="modal-box" style="width:540px"><div class="modal-in">
+    <h3>✎ メンバー編集</h3>
+    <div class="modal-sub" style="margin-bottom:14px">冒険者の情報を書き換えます</div>
+    <input type="hidden" id="edit-member-id">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="form-label">LINE名</label><input class="form-input" id="edit-line-name"></div>
+      <div><label class="form-label">氏名</label><input class="form-input" id="edit-name"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="form-label">抽選ステータス</label><select class="form-input" id="edit-status"><option>未当選</option><option>1回当選済</option><option>2回当選済</option><option>3回当選済</option></select></div>
+      <div><label class="form-label">稼働状況</label><select class="form-input" id="edit-priority"><option value="1:アクティブ">アクティブ</option><option value="3:非アクティブ(未当選)">非アクティブ（未当選）</option><option value="2:非アクティブ(当選済)">非アクティブ（当選済）</option></select></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:9px;padding:13px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:9px">当選・買付情報</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:9px">
+        <div><label class="form-label">1回目当選日</label><input class="form-input" id="edit-won1" placeholder="20251104"></div>
+        <div><label class="form-label">2回目当選日</label><input class="form-input" id="edit-won2" placeholder="20260120"></div>
+        <div><label class="form-label">3回目当選日</label><input class="form-input" id="edit-won3" placeholder="20260325"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;align-items:center">
+        <div><label class="form-label">店舗買付成功日 <span style="color:var(--amber);font-size:10px">制限起算日</span></label><input class="form-input" id="edit-store-purchase" placeholder="20251110"></div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);cursor:pointer;padding-top:18px"><input type="checkbox" id="edit-no-purchase" style="width:15px;height:15px"> 購入なし（制限対象外）</label>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="form-label">最終活動日</label><input class="form-input" id="edit-last-active" placeholder="20260119"></div>
+      <div><label class="form-label">LINE User ID</label><input class="form-input" id="edit-line-uid" placeholder="U1234...（任意）"></div>
+    </div>
+    <div style="margin-bottom:4px"><label class="form-label">備考</label><input class="form-input" id="edit-note"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" style="border-color:rgba(224,92,110,.4);color:var(--red2)" onclick="confirmDeleteMember()">削除</button><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('modal-edit-member')">キャンセル</button><button class="btn btn-gold" onclick="saveEditMember()">保存</button></div>
+  </div></div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -541,6 +594,72 @@ function clearWon(memberId){
   const m=MEMBERS.find(x=>x.id===memberId);
   if(m){ if(m.won2){ m.won2=null; m.status='1回当選済'; } else if(m.won1){ m.won1=null; m.status='未当選'; } }
   toast('当選登録を取り消しました'); afterEdit();
+}
+
+// ===== メンバー 追加 / 編集 / 削除 =====
+function afterMemberEdit(){
+  saveQuest();
+  if(document.getElementById('s-segment').classList.contains('on')) runSegment();
+  else renderParty();
+}
+function openAddMember(){ document.getElementById('modal-add-member').classList.add('show'); }
+function addMember(){
+  const line=document.getElementById('new-line-name').value.trim();
+  if(!line){ toast('⚠ LINE名は必須です'); return; }
+  const maxId=Math.max(0,...MEMBERS.map(m=>m.id));
+  MEMBERS.unshift({ id:maxId+1, line_name:line, name:document.getElementById('new-name').value.trim(),
+    status:'未当選', priority:document.getElementById('new-priority').value,
+    won1:null,won2:null,won3:null,last_active:null,total_reward:0, no_purchase:false,
+    note:document.getElementById('new-note').value.trim(), line_user_id:document.getElementById('new-line-uid').value.trim()||'' });
+  ['new-line-name','new-name','new-note','new-line-uid'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  closeModal('modal-add-member'); toast('✓ メンバーを追加しました'); afterMemberEdit();
+}
+function openEditMember(id){
+  const m=MEMBERS.find(x=>x.id===id); if(!m) return;
+  document.getElementById('edit-member-id').value=id;
+  document.getElementById('edit-line-name').value=m.line_name||'';
+  document.getElementById('edit-name').value=m.name||'';
+  document.getElementById('edit-status').value=m.status||'未当選';
+  document.getElementById('edit-priority').value=m.priority||'1:アクティブ';
+  document.getElementById('edit-won1').value=m.won1?String(m.won1).replace('.0',''):'';
+  document.getElementById('edit-won2').value=m.won2?String(m.won2).replace('.0',''):'';
+  document.getElementById('edit-won3').value=m.won3?String(m.won3).replace('.0',''):'';
+  document.getElementById('edit-last-active').value=m.last_active?String(m.last_active).replace('.0',''):'';
+  document.getElementById('edit-note').value=m.note||'';
+  document.getElementById('edit-line-uid').value=m.line_user_id||'';
+  document.getElementById('edit-store-purchase').value=m.store_purchase_date?String(m.store_purchase_date).replace(/[^0-9]/g,''):'';
+  document.getElementById('edit-no-purchase').checked=!!m.no_purchase;
+  document.getElementById('modal-edit-member').classList.add('show');
+}
+function saveEditMember(){
+  const id=parseInt(document.getElementById('edit-member-id').value);
+  const m=MEMBERS.find(x=>x.id===id); if(!m) return;
+  m.line_name=document.getElementById('edit-line-name').value.trim()||m.line_name;
+  m.name=document.getElementById('edit-name').value.trim();
+  m.status=document.getElementById('edit-status').value;
+  m.priority=document.getElementById('edit-priority').value;
+  m.won1=document.getElementById('edit-won1').value.trim().replace(/[^0-9]/g,'')||null;
+  m.won2=document.getElementById('edit-won2').value.trim().replace(/[^0-9]/g,'')||null;
+  m.won3=document.getElementById('edit-won3').value.trim().replace(/[^0-9]/g,'')||null;
+  const la=document.getElementById('edit-last-active').value.trim().replace(/[^0-9]/g,'');
+  m.last_active=la.length===8?la:(la===''?null:m.last_active);
+  m.note=document.getElementById('edit-note').value.trim();
+  m.line_user_id=document.getElementById('edit-line-uid').value.trim();
+  const spd=document.getElementById('edit-store-purchase').value.trim().replace(/[^0-9]/g,'');
+  m.store_purchase_date=spd||null;
+  m.no_purchase=document.getElementById('edit-no-purchase').checked||false;
+  closeModal('modal-edit-member'); toast(`✓ ${m.name||m.line_name} の情報を更新しました`); afterMemberEdit();
+}
+function confirmDeleteMember(){
+  const id=parseInt(document.getElementById('edit-member-id').value);
+  const m=MEMBERS.find(x=>x.id===id); if(!m) return;
+  if(!confirm(`「${m.name||m.line_name}」を削除しますか？\nこの操作は元に戻せません。`)) return;
+  const idx=MEMBERS.findIndex(x=>x.id===id); if(idx>=0) MEMBERS.splice(idx,1);
+  if(liveData && supabaseClient){
+    supabaseClient.from('lq_members').delete().eq('id',id).then(()=>{});
+    supabaseClient.from('lq_weekly_inputs').delete().eq('member_id',id).then(()=>{});
+  }
+  closeModal('modal-edit-member'); toast(`${m.name||m.line_name} を削除しました`); afterMemberEdit();
 }
 // Supabase 全保存（本番 index.html と同一ロジック）
 async function saveToSupabase(){
@@ -718,11 +837,11 @@ function renderParty(){
   const filters=PARTY_DEFS.map(([k,l])=>`<button class="pill ${partyFilter===k?'on':''}" onclick="setPartyFilter('${k}')">${l}<span class="n">${MEMBERS.filter(m=>partyMatch(m,k)).length}</span></button>`).join('');
   document.getElementById('s-party').innerHTML =
     bannerHtml()
-    + ph('👥 パーティー<span class="em">一覧</span>', `全${MEMBERS.length}名　／　⚡アクティブ ${MEMBERS.filter(isActiveM).length}名・🛡制限中 ${MEMBERS.filter(m=>isRestricted(m)).length}名`)
+    + ph('👥 パーティー<span class="em">一覧</span>', `全${MEMBERS.length}名　／　⚡アクティブ ${MEMBERS.filter(isActiveM).length}名・🛡制限中 ${MEMBERS.filter(m=>isRestricted(m)).length}名`, `<button class="btn btn-gold" onclick="openAddMember()">＋ メンバー追加</button>`)
     + `<input id="party-q" class="qsearch" value="${esc(partyQ)}" oninput="onPartySearch(this.value)" placeholder="🔍 LINE名・氏名で検索（300名から絞り込み）">`
     + `<div class="filters">${filters}</div>`
     + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">冒険者リスト</span></span><span class="r" id="party-count"></span></div>`
-    + `<table><thead><tr><th>冒険者</th><th>称号</th><th>状態</th><th>累積ゴールド</th><th>ストック残</th><th>備考</th></tr></thead><tbody id="party-body"></tbody></table></div></div>`;
+    + `<table><thead><tr><th>冒険者</th><th>称号</th><th>状態</th><th>累積ゴールド</th><th>ストック残</th><th>備考</th><th>操作</th></tr></thead><tbody id="party-body"></tbody></table></div></div>`;
   renderPartyBody();
 }
 function renderPartyBody(){
@@ -737,6 +856,7 @@ function renderPartyBody(){
       <td data-label="累積G" class="g">${getAccruedReward(m.id).toLocaleString()}G</td>
       <td data-label="ストック残" class="g">${stock>0?stock.toLocaleString()+'G':'—'}</td>
       <td data-label="備考" style="color:var(--text3);font-size:12px">${esc(m.note||'—')}</td>
+      <td data-label="操作"><button class="btn-mini" onclick="openEditMember(${m.id})">✎ 編集</button></td>
     </tr>`;
   }).join(''):`<tr><td>${emptyParty(true)}</td></tr>`;
   document.getElementById('party-body').innerHTML=body;
@@ -866,7 +986,7 @@ function renderSegment(){
       </div></div>`
     + `<div class="two">
         <div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">抽出結果</span> <span id="seg-count" style="color:var(--gold2);font-family:'DM Mono',monospace;font-size:17px;margin-left:4px">0</span> <span style="font-size:11px;color:var(--text3)">名</span></span><span class="r" style="cursor:pointer" onclick="copyLineIds()">📋 コピー</span></div><div class="seg-list" id="seg-list"></div></div></div>
-        <div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">メンバー詳細</span></span><span class="r">スクロールで全件</span></div><div style="max-height:340px;overflow:auto"><table><thead><tr><th>LINE名</th><th>氏名</th><th>状態</th><th>稼働</th><th>備考</th></tr></thead><tbody id="seg-tbody"></tbody></table></div></div></div>
+        <div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">メンバー詳細</span></span><span class="r">スクロールで全件</span></div><div style="max-height:340px;overflow:auto"><table><thead><tr><th>LINE名</th><th>氏名</th><th>状態</th><th>稼働</th><th>備考</th><th>操作</th></tr></thead><tbody id="seg-tbody"></tbody></table></div></div></div>
       </div>`;
   _segCustomFn=SEG_PRESETS.all.customFn; setActivePreset('all'); runSegment();
 }
@@ -916,6 +1036,7 @@ function runSegment(){
       <td data-label="状態"><span class="badge b-reward">${tt.ic} ${esc(m.status||'—')}</span></td>
       <td data-label="稼働">${active?'<span class="badge b-done">⚡</span>':'<span class="badge b-gray">💤</span>'}${rest?' <span class="badge b-ail">🛡</span>':''}</td>
       <td data-label="備考" style="font-size:11px;color:var(--text3)">${esc(m.note||'')}</td>
+      <td data-label="操作"><button class="btn-mini" onclick="openEditMember(${m.id})">✎ 編集</button></td>
     </tr>`;
   }).join('') || `<tr><td><div class="empty" style="padding:24px"><div class="big">🔍</div>該当者がいません</div></td></tr>`;
 }
@@ -986,7 +1107,7 @@ function restoreFromBackup(input){
   input.value='';
 }
 
-function emptyParty(plain){ const inner=`<div class="big">👋</div>まだ仲間がいません。<br><span style="font-size:12px">本番ツールの「メンバー管理」で登録すると、ここに反映されます。</span>`; return `<div class="empty">${inner}</div>`; }
+function emptyParty(plain){ const inner=`<div class="big">👋</div>まだ仲間がいません。<br><span style="font-size:12px">下のボタンから最初の冒険者を登録できます。</span><br><button class="btn btn-gold" style="margin-top:14px" onclick="openAddMember()">＋ メンバーを追加</button>`; return `<div class="empty">${inner}</div>`; }
 
 function setMonth(mo){ curMonth=mo; renderWeekly(); }
 function setWeek(wk){ curWeek=wk; renderWeekly(); }
