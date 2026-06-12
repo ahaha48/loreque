@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<!--
+  ロレクエ 2期生 クエストUI（別サイト / サブ階層 quest/）
+  ・本番 index.html とは別ファイル。デザイン方向「ロイヤルクエスト」。
+  ・データは本番と同じ Supabase（lq_ テーブル）を【読み取り専用】で表示。
+  ・計算ロジック（報酬・制限・優先度）は本番 index.html と完全一致のものを再利用。
+  ・編集・保存機能は持たない（実データを壊さない）。編集は本番ツールで行う。
+  ・ローカル確認用に「サンプルデータ」表示ボタンを用意。
+  ・スマホ対応（下部タブバー）・抽出フィルタ・月別当選者タブを搭載。
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ロレクエ｜冒険者ギルド本部（2期生）</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0e10;--bg2:#15161b;--bg3:#1d1f26;--bg4:#262932;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#e9e9ee;--text2:#9596a6;--text3:#5d5f70;
+  --gold:#c9a84c;--gold2:#e8c87a;--gold3:#f7e3ab;
+  --rolex:#1a5c3a;--rolex2:#2f9d63;--rolex3:#4fc189;
+  --red:#e05c6e;--red2:#f07a8a;--amber:#e8a040;
+  --radius:12px;--radius-sm:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans JP',sans-serif;color:var(--text);font-size:14px;min-height:100vh;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(47,157,99,.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(201,168,76,.08), transparent 55%),
+    var(--bg);}
+.pix{font-family:'DotGothic16',monospace;letter-spacing:.02em;}
+.app{display:flex;min-height:100vh;visibility:hidden;}
+
+/* サイドバー（PC） */
+.sidebar{width:236px;min-width:236px;background:linear-gradient(180deg,#13141a,#101117);
+  border-right:1px solid var(--border);position:fixed;inset:0 auto 0 0;z-index:100;display:flex;flex-direction:column;}
+.sidebar-logo{padding:22px 20px 18px;border-bottom:1px solid var(--border);}
+.logo-badge{display:flex;align-items:center;gap:11px;}
+.logo-crown{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;
+  background:linear-gradient(135deg,var(--gold),var(--amber));box-shadow:0 0 14px rgba(201,168,76,.35),inset 0 0 0 1px rgba(255,255,255,.25);}
+.logo-text{font-size:17px;}
+.logo-text .pix{background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.logo-sub{font-size:10px;color:var(--rolex3);margin-top:3px;letter-spacing:.14em;}
+.nav-section{padding:14px 18px 5px;font-size:10px;color:var(--text3);letter-spacing:.16em;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:11px 18px 11px 26px;cursor:pointer;color:var(--text2);
+  font-size:13px;border-left:3px solid transparent;position:relative;transition:all .15s;}
+.nav-item .ic{width:18px;text-align:center;font-size:15px;}
+.nav-item:hover{background:var(--bg3);color:var(--text);}
+.nav-item.active{background:linear-gradient(90deg,rgba(201,168,76,.14),transparent);color:var(--gold2);border-left-color:var(--gold);}
+.nav-item.active::before{content:'▶';position:absolute;left:11px;color:var(--gold);font-size:10px;animation:blink 1s steps(1) infinite;}
+@keyframes blink{50%{opacity:.25;}}
+.sidebar-footer{padding:14px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);}
+.sidebar-footer .em{color:var(--text2);display:block;margin-bottom:6px;word-break:break-all;}
+.sb-link{color:var(--text3);cursor:pointer;text-decoration:underline;}.sb-link:hover{color:var(--text2);}
+
+/* モバイル用 上部バー＋下部タブ（PCでは非表示） */
+.mtop{display:none;}
+.mnav{display:none;}
+
+/* メイン */
+.main{margin-left:236px;flex:1;padding:24px 30px 60px;max-width:1180px;}
+.page-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.page-title{font-size:23px;}
+.page-title .em{background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:5px;}
+
+/* ドラクエ風ウィンドウ */
+.dq{position:relative;border-radius:12px;padding:2px;
+  background:linear-gradient(180deg,rgba(232,200,122,.55),rgba(201,168,76,.18) 40%,rgba(47,157,99,.22));}
+.dq-inner{background:linear-gradient(180deg,#0c0d12,#0a0b0f);border-radius:10px;padding:15px 17px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),inset 0 14px 30px rgba(0,0,0,.5);}
+.dq-head{display:flex;align-items:center;gap:8px;margin:-2px 0 12px;padding-bottom:9px;border-bottom:1px dashed rgba(232,200,122,.25);flex-wrap:wrap;}
+.dq-head .t{font-size:13px;color:var(--gold2);letter-spacing:.06em;}
+.dq-head .t .pix{font-size:14px;}
+.dq-head .r{margin-left:auto;font-size:11px;color:var(--text3);}
+
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:18px;}
+.stat .lbl{font-size:11px;color:var(--text3);letter-spacing:.05em;}
+.stat .val{font-family:'DM Mono',monospace;font-size:29px;font-weight:500;margin-top:6px;line-height:1;}
+.stat .sub{font-size:11px;color:var(--text3);margin-top:7px;}
+.val.gold{color:var(--gold2);} .val.green{color:var(--rolex3);} .val.red{color:var(--red2);}
+.gtag{font-family:'DotGothic16',monospace;font-size:13px;color:var(--gold);margin-left:3px;}
+
+.exp{height:10px;border-radius:6px;background:#0a0b0f;box-shadow:inset 0 0 0 1px var(--border);overflow:hidden;margin-top:10px;}
+.exp > i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--rolex),var(--rolex3) 70%,var(--gold2));box-shadow:0 0 10px rgba(79,193,137,.5);}
+
+/* 今週の討伐者（当選者）パネル */
+.winners{display:flex;flex-wrap:wrap;gap:10px;}
+.winner-card{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:11px;
+  background:linear-gradient(135deg,rgba(201,168,76,.16),rgba(47,157,99,.12));border:1px solid var(--gold);}
+.winner-card .c{font-size:22px;filter:drop-shadow(0 0 8px rgba(232,200,122,.6));}
+.winner-card b{font-size:14px;}
+.winner-card small{display:block;color:var(--text3);font-size:11px;}
+
+.q-row{display:grid;grid-template-columns:1.5fr 1fr 1.1fr;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--border);}
+.q-row:last-child{border-bottom:none;}
+.q-name{display:flex;flex-direction:column;}
+.q-name b{font-weight:500;}
+.q-name span{font-size:11px;color:var(--text3);}
+.title-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--gold2);
+  background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:1px 8px;margin-top:3px;width:max-content;}
+.sortie{font-family:'DM Mono',monospace;font-size:12px;}
+.sortie.full{color:var(--rolex3);} .sortie.part{color:var(--amber);} .sortie.none{color:var(--text3);}
+.mini-exp{height:6px;width:84px;border-radius:4px;background:#0a0b0f;box-shadow:inset 0 0 0 1px var(--border);overflow:hidden;margin-top:5px;}
+.mini-exp > i{display:block;height:100%;}
+.mini-exp > i.full{background:linear-gradient(90deg,var(--rolex2),var(--rolex3));}
+.mini-exp > i.part{background:linear-gradient(90deg,var(--amber),#f5c97a);}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;border-radius:20px;padding:3px 10px;white-space:nowrap;}
+.b-wait{background:var(--bg4);color:var(--text2);}
+.b-done{background:rgba(47,157,99,.16);color:var(--rolex3);border:1px solid rgba(47,157,99,.3);}
+.b-reward{background:rgba(201,168,76,.14);color:var(--gold2);border:1px solid rgba(201,168,76,.32);}
+.b-drop{background:linear-gradient(90deg,rgba(201,168,76,.25),rgba(47,157,99,.2));color:var(--gold3);border:1px solid var(--gold);}
+.b-ail{background:rgba(232,160,64,.13);color:var(--amber);border:1px solid rgba(232,160,64,.3);}
+.b-gray{background:rgba(144,144,168,.12);color:var(--text2);}
+
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;border-radius:8px;font-size:12px;font-weight:500;
+  padding:8px 15px;font-family:'Noto Sans JP';transition:all .15s;white-space:nowrap;}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);}
+.btn-gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#241a06;box-shadow:0 2px 0 #7a611f;}
+
+.two{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;}
+
+/* フィルタ・タブ */
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+.pill{padding:8px 13px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid var(--border2);color:var(--text2);background:transparent;}
+.pill:hover{color:var(--text);}
+.pill.on{background:linear-gradient(180deg,rgba(201,168,76,.2),rgba(201,168,76,.08));border-color:var(--gold);color:var(--gold2);}
+.pill .n{font-family:'DM Mono',monospace;opacity:.8;margin-left:3px;}
+.sel-mono{font-family:'DM Mono',monospace;}
+.qsearch{width:100%;max-width:360px;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);padding:10px 13px;font-size:13px;font-family:'Noto Sans JP';outline:none;margin-bottom:13px;display:block;}
+.qsearch:focus{border-color:var(--gold);}
+.qsearch::placeholder{color:var(--text3);}
+.fld label{display:block;font-size:11px;color:var(--text3);margin-bottom:5px;}
+.qinput,.qselect{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:9px 11px;font-size:13px;font-family:'Noto Sans JP';outline:none;}
+.qinput:focus,.qselect:focus{border-color:var(--gold);}
+.qselect option{background:var(--bg3);}
+.qinput::placeholder{color:var(--text3);}
+.seg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.seg-list{background:#0a0b0f;border:1px solid var(--border);border-radius:9px;padding:12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--rolex3);max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;line-height:1.7;}
+
+table{width:100%;border-collapse:collapse;}
+thead th{padding:10px 9px;text-align:left;font-size:11px;color:var(--text3);letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody td{padding:11px 9px;font-size:13px;border-bottom:1px solid var(--border);}
+tbody tr:hover{background:rgba(255,255,255,.02);}
+.mono{font-family:'DM Mono',monospace;}
+.g{font-family:'DM Mono',monospace;color:var(--gold2);}
+.empty{text-align:center;padding:42px 20px;color:var(--text3);}
+.empty .big{font-size:34px;margin-bottom:10px;}
+
+.screen{display:none;} .screen.on{display:block;}
+
+/* ログイン */
+.login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:500;padding:20px;
+  background:radial-gradient(900px 600px at 50% -10%,rgba(47,157,99,.12),transparent 60%),var(--bg);}
+.login-card{text-align:center;max-width:420px;padding:8px;}
+.login-card .crown{font-size:58px;filter:drop-shadow(0 0 18px rgba(232,200,122,.6));}
+.login-card h1{font-size:26px;margin:10px 0 4px;}
+.login-card h1 .pix{background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.login-card p{font-size:12px;color:var(--text2);margin-bottom:24px;}
+.login-btns{display:flex;flex-direction:column;gap:10px;align-items:center;}
+.gbtn{display:inline-flex;align-items:center;gap:10px;background:#fff;color:#333;border:none;border-radius:10px;padding:13px 22px;font-size:14px;font-weight:500;cursor:pointer;}
+.login-card .hint{margin-top:20px;font-size:11px;color:var(--text3);line-height:1.7;}
+
+/* 当選演出 */
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:999;align-items:center;justify-content:center;padding:18px;}
+.ov.show{display:flex;}
+.win{width:440px;max-width:94vw;border-radius:16px;padding:3px;text-align:center;
+  background:linear-gradient(180deg,var(--gold3),var(--gold) 30%,var(--rolex));box-shadow:0 0 50px rgba(201,168,76,.5);animation:pop .35s cubic-bezier(.2,1.3,.4,1);}
+@keyframes pop{from{transform:scale(.7);opacity:0;}}
+.win-in{background:radial-gradient(120% 90% at 50% 0%,#16221b,#0a0b0f);border-radius:13px;padding:30px 24px 24px;position:relative;overflow:hidden;}
+.win-in::before{content:'';position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent,rgba(232,200,122,.16),transparent 30%);animation:spin 6s linear infinite;}
+@keyframes spin{to{transform:rotate(1turn);}}
+.win-in > *{position:relative;}
+.win .fan{font-size:13px;color:var(--gold2);letter-spacing:.3em;}
+.win .crown{font-size:54px;margin:8px 0 4px;filter:drop-shadow(0 0 16px rgba(232,200,122,.7));animation:bob 1.6s ease-in-out infinite;}
+@keyframes bob{50%{transform:translateY(-7px);}}
+.win h2{font-size:22px;margin:4px 0 2px;}
+.win h2 .pix{background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.win .item{font-size:14px;color:var(--rolex3);margin:10px 0 4px;}
+.win .loot{margin:14px auto;padding:11px 14px;border:1px dashed rgba(232,200,122,.4);border-radius:10px;width:max-content;max-width:100%;font-size:13px;color:var(--text2);}
+.win .loot b{color:var(--gold2);font-family:'DM Mono',monospace;font-size:16px;}
+
+.banner{margin-bottom:16px;padding:9px 14px;border-radius:9px;font-size:12px;border:1px dashed var(--border2);color:var(--text2);background:rgba(232,160,64,.06);}
+
+#toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);
+  color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:1000;max-width:90vw;text-align:center;}
+#toast.show{opacity:1;}
+::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px;}
+
+/* ============ スマホ対応 ============ */
+@media (max-width:760px){
+  .sidebar{display:none;}
+  /* 上部ブランドバー */
+  .mtop{display:flex;align-items:center;gap:10px;position:fixed;top:0;left:0;right:0;height:54px;z-index:200;
+    padding:0 14px;background:linear-gradient(180deg,#13141a,#101117ee);border-bottom:1px solid var(--border);backdrop-filter:blur(6px);}
+  .mtop .logo-crown{width:30px;height:30px;font-size:16px;border-radius:7px;}
+  .mtop .bt{font-size:15px;}
+  .mtop .bt .pix{background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .mtop .out{margin-left:auto;font-size:11px;color:var(--text3);text-decoration:underline;}
+  /* 下部タブバー */
+  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:200;height:62px;
+    background:linear-gradient(180deg,#14151b,#0e0f14);border-top:1px solid var(--border2);padding-bottom:env(safe-area-inset-bottom);}
+  .mnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--text3);cursor:pointer;font-size:9px;}
+  .mnav-item .ic{font-size:17px;line-height:1;}
+  .seg-grid{grid-template-columns:1fr 1fr;}
+  .mnav-item.active{color:var(--gold2);}
+  .mnav-item.active .ic{filter:drop-shadow(0 0 6px rgba(232,200,122,.5));}
+
+  .main{margin-left:0;padding:66px 13px 84px;max-width:100%;}
+  .page-header{margin-bottom:16px;}
+  .page-title{font-size:20px;}
+  .grid4{grid-template-columns:1fr 1fr;gap:10px;}
+  .grid3{grid-template-columns:1fr;gap:10px;}
+  .two{grid-template-columns:1fr;}
+  .stat .val{font-size:26px;}
+  .q-row{grid-template-columns:1fr auto;grid-template-areas:'name badge' 'sortie badge';gap:5px 10px;padding:12px 4px;align-items:start;}
+  .q-row .c-name{grid-area:name;} .q-row .c-sortie{grid-area:sortie;} .q-row .c-badge{grid-area:badge;align-self:center;text-align:right;}
+  .pill{padding:9px 13px;}
+  .qsearch{max-width:100%;}
+
+  /* テーブル → カード化 */
+  table,thead,tbody,tr,td{display:block;}
+  thead{display:none;}
+  tbody tr{border:1px solid var(--border);border-radius:11px;margin-bottom:10px;padding:6px 12px;background:rgba(255,255,255,.015);}
+  tbody td{border:none;padding:7px 0;display:flex;justify-content:space-between;align-items:center;gap:14px;}
+  tbody td::before{content:attr(data-label);color:var(--text3);font-size:11px;white-space:nowrap;}
+  tbody td:first-child{border-bottom:1px dashed var(--border);padding-bottom:9px;margin-bottom:3px;}
+  tbody td:first-child::before{display:none;}
+  #toast{bottom:78px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ログイン -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="crown">👑</div>
+    <h1><span class="pix">ロレクエ</span></h1>
+    <p>冒険者ギルド本部（2期生）／ロレックスを求めし者たち</p>
+    <div class="login-btns">
+      <button class="gbtn" onclick="signInWithGoogle()">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.6 2.4 30.1 0 24 0 14.6 0 6.4 5.4 2.5 13.3l7.9 6.2C12.2 13.7 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9.1h12.4c-.5 2.9-2.1 5.3-4.6 7l7.1 5.5c4.2-3.8 6.6-9.5 6.6-17z"/><path fill="#FBBC05" d="M10.4 28.5c-.5-1.4-.8-2.9-.8-4.5s.3-3.1.8-4.5l-7.9-6.2C.9 16.3 0 20 0 24s.9 7.7 2.5 10.7l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.1 0 11.3-2 15-5.5l-7.1-5.5c-2 1.4-4.6 2.2-7.9 2.2-6.4 0-11.8-4.2-13.6-9.9l-7.9 6.2C6.4 42.6 14.6 48 24 48z"/></svg>
+        Googleでログイン
+      </button>
+      <button class="btn btn-ghost" onclick="loadSample()">🎲 サンプルデータで見た目を確認</button>
+    </div>
+    <div class="hint">
+      ※ 実データ（2期生のアップロード済みデータ）を表示するには、本番ツールと同じ Google アカウントでのログインが必要です。<br>
+      ローカルのファイルからは Google ログインは使えません（別サイトへ飛びます）。実データは本番と同じサイトに設置してから表示されます。
+    </div>
+  </div>
+</div>
+
+<!-- モバイル上部バー -->
+<div class="mtop">
+  <div class="logo-crown">👑</div>
+  <div class="bt"><span class="pix">ロレクエ</span></div>
+  <span class="out" onclick="go('backup')" style="margin-left:auto">💾 保全</span>
+  <span class="out" onclick="signOut()" style="margin-left:14px">ログアウト</span>
+</div>
+
+<!-- アプリ -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-badge">
+        <div class="logo-crown">👑</div>
+        <div>
+          <div class="logo-text"><span class="pix">ロレクエ</span></div>
+          <div class="logo-sub">ADVENTURERS GUILD ・2期生</div>
+        </div>
+      </div>
+    </div>
+    <nav style="flex:1;padding:8px 0;">
+      <div class="nav-section">クエスト</div>
+      <div class="nav-item active" data-s="home" onclick="go('home')"><span class="ic">🏰</span>冒険者ギルド本部</div>
+      <div class="nav-item" data-s="weekly" onclick="go('weekly')"><span class="ic">⚔️</span>今週のクエスト</div>
+      <div class="nav-item" data-s="party" onclick="go('party')"><span class="ic">👥</span>パーティー一覧</div>
+      <div class="nav-section">ほうしゅう・きろく</div>
+      <div class="nav-item" data-s="gold" onclick="go('gold')"><span class="ic">💰</span>ゴールド管理</div>
+      <div class="nav-item" data-s="hall" onclick="go('hall')"><span class="ic">🏆</span>討伐の間（当選者）</div>
+      <div class="nav-section">ちゅうしゅつ</div>
+      <div class="nav-item" data-s="segment" onclick="go('segment')"><span class="ic">🎯</span>セグメント抽出</div>
+      <div class="nav-section">データ</div>
+      <div class="nav-item" data-s="backup" onclick="go('backup')"><span class="ic">💾</span>バックアップ</div>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="em" id="user-email"></span>
+      <span class="sb-link" onclick="signOut()">ログアウト</span>　·　<span style="color:var(--text3)">読み取り専用</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="screen on" id="s-home"></div>
+    <div class="screen" id="s-weekly"></div>
+    <div class="screen" id="s-party"></div>
+    <div class="screen" id="s-gold"></div>
+    <div class="screen" id="s-hall"></div>
+    <div class="screen" id="s-segment"></div>
+    <div class="screen" id="s-backup"></div>
+  </main>
+</div>
+
+<!-- モバイル下部タブ -->
+<nav class="mnav">
+  <div class="mnav-item active" data-s="home" onclick="go('home')"><span class="ic">🏰</span>ギルド</div>
+  <div class="mnav-item" data-s="weekly" onclick="go('weekly')"><span class="ic">⚔️</span>クエスト</div>
+  <div class="mnav-item" data-s="party" onclick="go('party')"><span class="ic">👥</span>パーティー</div>
+  <div class="mnav-item" data-s="gold" onclick="go('gold')"><span class="ic">💰</span>報酬</div>
+  <div class="mnav-item" data-s="hall" onclick="go('hall')"><span class="ic">🏆</span>当選者</div>
+  <div class="mnav-item" data-s="segment" onclick="go('segment')"><span class="ic">🎯</span>抽出</div>
+</nav>
+
+<div class="ov" id="ov" onclick="if(event.target===this)closeWin()">
+  <div class="win"><div class="win-in" id="win-body"></div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================================================================
+// 設定（本番と同じ Supabase プロジェクト）
+// ================================================================
+const SUPABASE_URL = 'https://ixwrecvoqvuzzvxsafvw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4d3JlY3ZvcXZ1enp2eHNhZnZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MTMwNjYsImV4cCI6MjA5MDE4OTA2Nn0.UCCEzORa6RhR0sNyXvqv4P8nEeoVF20r3f8oTyO7Xok';
+let supabaseClient = null;
+const STD_VENUE = 5;
+
+// ================================================================
+// データ（本番と同じ構造）
+// ================================================================
+const SHOPS = ['表参道','新宿','銀座本店','名古屋','大阪'];
+let MEMBERS=[], WEEKLY={}, WIN_HISTORY=[], PURCHASE={}, STORE_PURCHASES=[], PAYMENTS=[];
+let curMonth=new Date().getMonth()+1, curWeek=1;
+let availableMonths=[new Date().getMonth()+1];
+
+// 画面ごとのフィルタ状態・検索キーワード
+let partyFilter='all', weeklyFilter='all', hallFilter='thisweek';
+let partyQ='', weeklyQ='', goldQ='', hallQ='';
+
+// ================================================================
+// 計算ロジック（本番 index.html と完全一致）
+// ================================================================
+function fmtDate(s){ if(!s) return '—'; s=String(s).replace('.0','').replace(/-/g,'').replace(/[^0-9]/g,''); if(s.length===8) return `${s.slice(0,4)}.${s.slice(4,6)}.${s.slice(6,8)}`; return '—'; }
+function parseDateStr(s){ if(!s||s.length<8) return null; s=String(s).replace(/[^0-9]/g,''); if(s.length!==8) return null; return new Date(s.slice(0,4), parseInt(s.slice(4,6))-1, s.slice(6,8)); }
+function fmtDateObj(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`; }
+function getWkKey(month,week,memberId){ return `${month}-${week}-${memberId}`; }
+function getWk(month,week,memberId){ return WEEKLY[getWkKey(month,week,memberId)] || {apply:null,result_ss:false,won_date:null,won_shop:null}; }
+function isParticipating(month,week,memberId){
+  const w=WEEKLY[getWkKey(month,week,memberId)]; if(!w) return false;
+  if((w.apply||0)>=1) return true; if(w.result_ss===true) return true;
+  if(w.restricted_applied) return true; if(w.restricted_result) return true; if(w.won_date) return true; return false;
+}
+function isActiveByDate(m){ if(!m.last_active) return false; const s=String(m.last_active).replace(/[^0-9]/g,'').slice(0,8); if(s.length<8) return false; const d=parseDateStr(s); if(!d) return false; return (new Date()-d)<=30*86400000; }
+function calcPriority(m){ if(isActiveByDate(m)) return '1:アクティブ'; if(isRestricted(m)) return '2:非アクティブ(当選済)'; return m.status==='未当選'?'3:非アクティブ(未当選)':'2:非アクティブ(当選済)'; }
+function getLastPurchaseSuccessDate(m){
+  let latest=null;
+  WIN_HISTORY.forEach((w,idx)=>{ if(w.member_id!==m.id) return; const p=PURCHASE[idx]; if(p&&p.result==='success'&&p.purchase_date){ const d=p.purchase_date.replace(/[^0-9]/g,''); if(!latest||d>latest) latest=d; }});
+  STORE_PURCHASES.forEach(p=>{ if(p.member_id!==m.id&&p.line_name!==m.line_name) return; if(p.result==='success'&&p.purchase_date){ const d=String(p.purchase_date).replace(/[^0-9]/g,''); if(!latest||d>latest) latest=d; }});
+  if(m.store_purchase_date){ const d=String(m.store_purchase_date).replace(/[^0-9]/g,''); if(!latest||d>latest) latest=d; }
+  if(m.no_purchase) return null;
+  if(!latest&&(m.won1||m.won2||m.won3)){ const lw=m.won3||m.won2||m.won1; const d=String(lw).replace(/[^0-9]/g,'').slice(0,8); if(d.length===8) latest=d; }
+  return latest;
+}
+function isRestricted(m){ const d=parseDateStr(getLastPurchaseSuccessDate(m)); if(!d) return false; const rel=new Date(d); rel.setMonth(rel.getMonth()+6); return new Date()<rel; }
+function getRestrictionReleaseDate(memberId){ const m=MEMBERS.find(x=>x.id===memberId); if(!m) return null; const d=parseDateStr(getLastPurchaseSuccessDate(m)); if(!d) return null; const rel=new Date(d); rel.setMonth(rel.getMonth()+6); return fmtDateObj(rel); }
+function getRestrictionDaysLeft(memberId){ const m=MEMBERS.find(x=>x.id===memberId); if(!m) return 0; const d=parseDateStr(getLastPurchaseSuccessDate(m)); if(!d) return 0; const rel=new Date(d); rel.setMonth(rel.getMonth()+6); return Math.max(0,Math.ceil((rel-new Date())/86400000)); }
+function getFirstWinIdx(memberId){ let min=Infinity; WIN_HISTORY.forEach(w=>{ if(w.member_id!==memberId) return; if(w.is_companion_mode) return; const idx=(w.month||0)*10+(w.week||0); if(idx<min) min=idx; }); return min; }
+function getAccruedReward(memberId){
+  const m=MEMBERS.find(x=>x.id===memberId); if(!m) return 0;
+  const firstWin=getFirstWinIdx(memberId); let count=0;
+  Object.keys(WEEKLY).forEach(key=>{ const parts=key.split('-'); if(parts.length<3) return; if(parseInt(parts[2])!==memberId) return;
+    const w=WEEKLY[key]; if(!w||!w.result_ss||w.won_date) return;
+    if(w.apply==null||w.apply<STD_VENUE) return;
+    if(m.no_purchase===true){ count++; return; }
+    const weekIdx=parseInt(parts[0])*10+parseInt(parts[1]); if(weekIdx<firstWin) count++; });
+  return count*1000;
+}
+function getPaidTotal(memberId){ return PAYMENTS.filter(p=>p.member_id===memberId).reduce((s,p)=>s+(parseInt(p.amount)||0),0); }
+function getStock(memberId){ return getAccruedReward(memberId)-getPaidTotal(memberId); }
+function rankTitle(m){
+  if(m.status==='未当選') return {t:'見習い冒険者',ic:'🔰'};
+  if(m.status==='1回当選済') return {t:'称号「初討伐」',ic:'🎖'};
+  if(m.status==='2回当選済') return {t:'称号「二つ星」',ic:'⭐'};
+  if(m.status==='3回当選済') return {t:'称号「三つ星」',ic:'👑'};
+  return {t:m.status||'—',ic:'·'};
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// 今週の当選者（curMonth/curWeek の WIN_HISTORY、なければ WEEKLY won_date から補完）
+function winnersOfWeek(mo,wk){
+  const fromHist=WIN_HISTORY.filter(w=>w.month===mo && w.week===wk);
+  if(fromHist.length) return fromHist;
+  // フォールバック: WEEKLY に won_date があるメンバー
+  const out=[];
+  MEMBERS.forEach(m=>{ const w=getWk(mo,wk,m.id); if(w.won_date){ out.push({member_id:m.id,line_name:m.line_name,name:m.name,won_date:w.won_date,shop:w.won_shop,month:mo,week:wk}); }});
+  return out;
+}
+function isActiveM(m){ return calcPriority(m)==='1:アクティブ'; }
+// 名前検索（LINE名 or 氏名の部分一致・大文字小文字無視）。300名から絞り込む用。
+function matchQ(m,q){ q=(q||'').toLowerCase().trim(); if(!q) return true; return (m.line_name||'').toLowerCase().includes(q)||(m.name||'').toLowerCase().includes(q); }
+// 指定した月・週に発表された当選者パネル（ダッシュボード／週次画面で共用）
+function winnersPanelHtml(mo,wk,title){
+  const winners=winnersOfWeek(mo,wk);
+  const inner = winners.length
+    ? `<div class="winners">${winners.map(w=>`<div class="winner-card"><span class="c">👑</span><div><b>${esc(w.line_name||w.name||'冒険者')}</b><small>${esc(w.shop||'討伐')}・${fmtDate(w.won_date)}</small></div></div>`).join('')}</div>`
+    : `<div style="color:var(--text3);font-size:13px;padding:6px 2px">この週はまだ討伐者（当選者）がいません。</div>`;
+  return `<div class="dq" style="margin-bottom:16px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">${title}</span></span><span class="r">${mo}月 第${wk}週 ／ ${winners.length}名</span></div>${inner}</div></div>`;
+}
+
+// ================================================================
+// 画面切替
+// ================================================================
+const RENDER={home:renderHome, weekly:renderWeekly, party:renderParty, gold:renderGold, hall:renderHall, segment:renderSegment, backup:renderBackup};
+function go(s){
+  document.querySelectorAll('.nav-item,.mnav-item').forEach(n=>n.classList.toggle('active', n.dataset.s===s));
+  document.querySelectorAll('.screen').forEach(el=>el.classList.toggle('on', el.id===('s-'+s)));
+  RENDER[s](); window.scrollTo(0,0);
+}
+let restoreMode=false;
+function bannerHtml(){
+  if(restoreMode) return `<div class="banner" style="background:rgba(91,141,238,.08)">📤 <b>バックアップ表示中</b>（読み込んだファイルの内容）。Supabase（本番データ）には接続していません。</div>`;
+  return SAMPLE_MODE ? `<div class="banner">🎲 <b>サンプルデータ表示中</b>（ダミー）。実データは本番と同じGoogleアカウントでログインするとSupabaseから読み込まれます。</div>` : '';
+}
+function ph(title,sub,right){ return `<div class="page-header"><div><div class="page-title pix">${title}</div><div class="page-sub">${sub}</div></div>${right||''}</div>`; }
+function statCard(lbl,val,unit,sub,cls){ return `<div class="dq"><div class="dq-inner stat"><div class="lbl">${lbl}</div><div class="val ${cls}">${val}<span class="gtag">${unit}</span></div><div class="sub">${sub}</div></div></div>`; }
+function statGauge(lbl,rate,activeCount,applied){ return `<div class="dq"><div class="dq-inner stat"><div class="lbl">${lbl}</div><div class="val green">${rate}<span class="gtag">%</span></div><div class="exp"><i style="width:${rate}%"></i></div><div class="sub" style="margin-top:6px">出撃完了 ${applied}／アクティブ ${activeCount}名</div></div></div>`; }
+
+// ===== ギルド本部 =====
+function renderHome(){
+  const venue=STD_VENUE;
+  const active=MEMBERS.filter(m=>calcPriority(m)==='1:アクティブ');
+  let applied=0,rewardCount=0;
+  MEMBERS.forEach(m=>{ const w=getWk(curMonth,curWeek,m.id);
+    if(w.apply>=venue) applied++;
+    if(w.result_ss&&!w.won_date&&w.apply!=null&&w.apply>=venue) rewardCount++; });
+  const totalStock=MEMBERS.reduce((s,m)=>s+Math.max(0,getStock(m.id)),0);
+  const rate=active.length?Math.round(applied/active.length*100):0;
+  const winners=winnersOfWeek(curMonth,curWeek);
+  const rows=MEMBERS.filter(m=>!isRestricted(m))
+    .sort((a,b)=>(calcPriority(a)==='1:アクティブ'?0:1)-(calcPriority(b)==='1:アクティブ'?0:1))
+    .slice(0,6).map(m=>questRow(m,venue)).join('') || emptyParty();
+
+  document.getElementById('s-home').innerHTML =
+    bannerHtml()
+    + ph('🏰 冒険者<span class="em">ギルド本部</span>', `ロレックスを求めし者たちの拠点　／　${curMonth}月 第${curWeek}週`,
+        `<button class="btn btn-gold" onclick="demoWin()">✨ 当選演出を見る</button>`)
+    + winnersPanelHtml(curMonth,curWeek,'🎉 今週の討伐者（当選者）')
+    + `<div class="grid4">
+        ${statCard('💰 未払いゴールド', totalStock.toLocaleString(),'G',`受け渡し待ち ${MEMBERS.filter(m=>getStock(m.id)>0).length}名`,'gold')}
+        ${statCard('⚔ 今週の報酬発生', rewardCount,'名',`出撃5/5＋戦果報告`,'gold')}
+        ${statGauge('🛡 パーティー稼働', rate, active.length, applied)}
+        ${statCard('🏆 累計討伐', WIN_HISTORY.length,'体',`今週 ${winners.length}体`,'red')}
+      </div>
+      <div class="two">
+        <div class="dq"><div class="dq-inner">
+          <div class="dq-head"><span class="t"><span class="pix">⚔ 今週のクエスト</span></span><span class="r">上位6名</span></div>
+          ${rows}
+          <div style="margin-top:12px;text-align:center"><button class="btn btn-ghost" onclick="go('weekly')">クエスト一覧へ ▶</button></div>
+        </div></div>
+        <div class="dq"><div class="dq-inner">
+          <div class="dq-head"><span class="t"><span class="pix">👥 パーティー状況</span></span></div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            ${miniStat('⚡ アクティブ', active.length+'名', 'var(--rolex3)')}
+            ${miniStat('💤 休止中', (MEMBERS.length-active.length)+'名', 'var(--text2)')}
+            ${miniStat('🛡 制限期間中', MEMBERS.filter(m=>isRestricted(m)).length+'名', 'var(--amber)')}
+            ${miniStat('👑 当選経験あり', MEMBERS.filter(m=>m.status&&m.status!=='未当選').length+'名', 'var(--gold2)')}
+            ${miniStat('🧑‍🤝‍🧑 総メンバー', MEMBERS.length+'名', 'var(--text)')}
+          </div>
+          <div style="margin-top:12px;text-align:center"><button class="btn btn-ghost" onclick="go('party')">パーティー一覧へ ▶</button></div>
+        </div></div>
+      </div>`;
+}
+function miniStat(l,v,c){ return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:13px">${l}</span><b class="mono" style="color:${c}">${v}</b></div>`; }
+
+function questRow(m,venue){
+  const w=getWk(curMonth,curWeek,m.id);
+  const apply=w.apply, full=apply!=null&&apply>=venue, partial=apply!=null&&apply>0&&apply<venue;
+  const isWon=!!w.won_date, rewardEligible=w.result_ss&&!isWon&&full, tt=rankTitle(m);
+  let sortie,mexp;
+  if(full){ sortie=`<div class="sortie full">出撃 ${apply}/${venue} ✓</div>`; mexp=`<div class="mini-exp"><i class="full" style="width:100%"></i></div>`; }
+  else if(partial){ sortie=`<div class="sortie part">出撃 ${apply}/${venue}</div>`; mexp=`<div class="mini-exp"><i class="part" style="width:${Math.round(apply/venue*100)}%"></i></div>`; }
+  else { sortie=`<div class="sortie none">未出撃</div>`; mexp=''; }
+  let badge;
+  if(isWon) badge=`<span class="badge b-drop">👑 レアドロップ！</span>`;
+  else if(rewardEligible) badge=`<span class="badge b-reward">✦ 報酬対象 +1,000G</span>`;
+  else if(w.result_ss) badge=`<span class="badge b-done">戦果報告 ✓（未達）</span>`;
+  else if(partial) badge=`<span class="badge b-wait">対象外（未達）</span>`;
+  else badge=`<span class="badge b-wait">戦果報告 待ち</span>`;
+  const stock=getStock(m.id);
+  return `<div class="q-row">
+    <div class="q-name c-name"><b>${esc(m.line_name||'')}</b><span>${esc(m.name||'—')}</span><span class="title-badge">${tt.ic} ${tt.t}</span></div>
+    <div class="c-sortie">${sortie}${mexp}</div>
+    <div class="c-badge">${badge}${stock>0?` <span style="font-size:10px;color:var(--gold2);display:inline-block;margin-top:2px">💰${stock.toLocaleString()}G</span>`:''}</div>
+  </div>`;
+}
+
+// ===== 今週のクエスト =====
+function weeklyCat(m){ const venue=STD_VENUE,w=getWk(curMonth,curWeek,m.id),full=w.apply!=null&&w.apply>=venue;
+  if(w.won_date) return 'won'; if(w.result_ss&&full) return 'reward'; if(w.result_ss&&!full) return 'ssna'; if(full) return 'sswait'; if(w.apply!=null&&w.apply>0) return 'part'; return 'none'; }
+function weeklyPass(m){ if(weeklyFilter==='all') return true; const c=weeklyCat(m);
+  if(weeklyFilter==='sswait') return c==='sswait'; if(weeklyFilter==='part') return c==='part'||c==='ssna'; return c===weeklyFilter; }
+const WEEKLY_DEFS=[['all','全員'],['reward','✦報酬対象'],['sswait','戦果報告待ち'],['won','👑討伐'],['part','出撃中(未達)'],['none','未出撃']];
+function renderWeekly(){
+  const monthPills=availableMonths.map(mo=>`<button class="pill ${mo===curMonth?'on':''}" onclick="setMonth(${mo})">${mo}月</button>`).join('');
+  const weekPills=[1,2,3,4,5].map(wk=>`<button class="pill ${wk===curWeek?'on':''}" onclick="setWeek(${wk})">第${wk}週</button>`).join('');
+  const normal=MEMBERS.filter(m=>!isRestricted(m));
+  const cnt=key=>key==='all'?normal.length:normal.filter(m=>{const c=weeklyCat(m); return key==='sswait'?(c==='sswait'):key==='part'?(c==='part'||c==='ssna'):c===key;}).length;
+  const filters=WEEKLY_DEFS.map(([k,l])=>`<button class="pill ${weeklyFilter===k?'on':''}" onclick="setWeeklyFilter('${k}')">${l}<span class="n">${cnt(k)}</span></button>`).join('');
+  document.getElementById('s-weekly').innerHTML =
+    bannerHtml()
+    + ph('⚔ 今週の<span class="em">クエスト</span>', '5店舗に出撃（申込SS）→ 戦果報告（結果SS）。全店舗そろって 1,000G。')
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span style="font-size:10px;color:var(--text3);width:30px">つき</span><div class="filters" style="margin:0">${monthPills}</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span style="font-size:10px;color:var(--text3);width:30px">しゅう</span><div class="filters" style="margin:0">${weekPills}</div></div>
+      </div></div>`
+    + winnersPanelHtml(curMonth,curWeek,'🎉 この週の討伐者（当選者）')
+    + `<input id="weekly-q" class="qsearch" value="${esc(weeklyQ)}" oninput="onWeeklySearch(this.value)" placeholder="🔍 LINE名・氏名で検索">
+      <div class="filters">${filters}</div>
+      <div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">${curMonth}月 第${curWeek}週</span></span><span class="r" id="weekly-count"></span></div><div id="weekly-body"></div></div></div>
+      <div id="weekly-rest"></div>`;
+  renderWeeklyBody();
+}
+function renderWeeklyBody(){
+  const venue=STD_VENUE;
+  const list=MEMBERS.filter(m=>!isRestricted(m)&&matchQ(m,weeklyQ)&&weeklyPass(m)).sort((a,b)=>(calcPriority(a)==='1:アクティブ'?0:1)-(calcPriority(b)==='1:アクティブ'?0:1));
+  document.getElementById('weekly-body').innerHTML = list.length?list.map(m=>questRow(m,venue)).join(''):`<div class="empty"><div class="big">🔍</div>該当する冒険者がいません</div>`;
+  const c=document.getElementById('weekly-count'); if(c) c.textContent=list.length+'名表示';
+  const restricted=MEMBERS.filter(m=>isRestricted(m)&&matchQ(m,weeklyQ));
+  document.getElementById('weekly-rest').innerHTML = restricted.length
+    ? `<div class="dq" style="margin-top:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">🛡 状態異常（購入制限中）</span></span><span class="r">${restricted.length}名</span></div>`
+      + restricted.map(m=>{ const days=getRestrictionDaysLeft(m.id),rel=fmtDate(getRestrictionReleaseDate(m.id));
+          return `<div class="q-row" style="grid-template-columns:1.5fr auto"><div class="q-name c-name"><b>${esc(m.line_name||'')}</b><span>${esc(m.name||'—')}</span></div><span class="badge b-ail c-badge">🛡 クールタイム 残${days}日（〜${rel}）</span></div>`; }).join('')
+      + `</div></div>` : '';
+}
+function onWeeklySearch(v){ weeklyQ=v; renderWeeklyBody(); }
+
+// ===== パーティー一覧 =====
+const PARTY_DEFS=[['all','全員'],['active','⚡アクティブ'],['inactive','💤休止中'],['restricted','🛡制限中'],['mikousen','未当選'],['tousen','当選済']];
+function partyMatch(m,k){ if(k==='all') return true; if(k==='active') return isActiveM(m); if(k==='inactive') return !isActiveM(m);
+  if(k==='restricted') return isRestricted(m); if(k==='mikousen') return m.status==='未当選'; if(k==='tousen') return m.status&&m.status!=='未当選'; }
+function renderParty(){
+  const filters=PARTY_DEFS.map(([k,l])=>`<button class="pill ${partyFilter===k?'on':''}" onclick="setPartyFilter('${k}')">${l}<span class="n">${MEMBERS.filter(m=>partyMatch(m,k)).length}</span></button>`).join('');
+  document.getElementById('s-party').innerHTML =
+    bannerHtml()
+    + ph('👥 パーティー<span class="em">一覧</span>', `全${MEMBERS.length}名　／　⚡アクティブ ${MEMBERS.filter(isActiveM).length}名・🛡制限中 ${MEMBERS.filter(m=>isRestricted(m)).length}名`)
+    + `<input id="party-q" class="qsearch" value="${esc(partyQ)}" oninput="onPartySearch(this.value)" placeholder="🔍 LINE名・氏名で検索（300名から絞り込み）">`
+    + `<div class="filters">${filters}</div>`
+    + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">冒険者リスト</span></span><span class="r" id="party-count"></span></div>`
+    + `<table><thead><tr><th>冒険者</th><th>称号</th><th>状態</th><th>累積ゴールド</th><th>ストック残</th><th>備考</th></tr></thead><tbody id="party-body"></tbody></table></div></div>`;
+  renderPartyBody();
+}
+function renderPartyBody(){
+  const list=MEMBERS.filter(m=>partyMatch(m,partyFilter)&&matchQ(m,partyQ)).sort((a,b)=>(isActiveM(a)?0:1)-(isActiveM(b)?0:1));
+  const body=list.length?list.map(m=>{
+    const tt=rankTitle(m),active=isActiveM(m),stock=getStock(m.id),rest=isRestricted(m);
+    const restInfo=rest?`残${getRestrictionDaysLeft(m.id)}日`:'';
+    return `<tr>
+      <td data-label="冒険者"><b>${esc(m.line_name||'')}</b><div style="font-size:11px;color:var(--text3)">${esc(m.name||'—')}</div></td>
+      <td data-label="称号"><span class="badge b-reward">${tt.ic} ${tt.t}</span></td>
+      <td data-label="状態">${active?'<span class="badge b-done">⚡ アクティブ</span>':'<span class="badge b-gray">💤 休止</span>'}${rest?` <span class="badge b-ail">🛡 制限 ${restInfo}</span>`:''}</td>
+      <td data-label="累積G" class="g">${getAccruedReward(m.id).toLocaleString()}G</td>
+      <td data-label="ストック残" class="g">${stock>0?stock.toLocaleString()+'G':'—'}</td>
+      <td data-label="備考" style="color:var(--text3);font-size:12px">${esc(m.note||'—')}</td>
+    </tr>`;
+  }).join(''):`<tr><td>${emptyParty(true)}</td></tr>`;
+  document.getElementById('party-body').innerHTML=body;
+  const c=document.getElementById('party-count'); if(c) c.textContent=list.length+'名表示';
+}
+function onPartySearch(v){ partyQ=v; renderPartyBody(); }
+
+// ===== ゴールド管理 =====
+function renderGold(){
+  const venue=STD_VENUE;
+  let totalStock=0,totalPaid=0,weekCount=0;
+  MEMBERS.forEach(m=>{ totalStock+=Math.max(0,getStock(m.id)); totalPaid+=getPaidTotal(m.id);
+    const w=getWk(curMonth,curWeek,m.id); if(w.result_ss&&!w.won_date&&w.apply!=null&&w.apply>=venue) weekCount++; });
+  document.getElementById('s-gold').innerHTML =
+    bannerHtml()
+    + ph('💰 ゴールド<span class="em">管理</span>', '報酬は当選時にまとめて受け渡し（1週 ＝ 出撃5/5 ＋ 戦果報告 で 1,000G）')
+    + `<div class="grid3">
+        ${statCard('未払いゴールド合計', totalStock.toLocaleString(),'G','受け渡し待ち','gold')}
+        ${statCard('受け渡し済み累計', totalPaid.toLocaleString(),'G',`${PAYMENTS.length}件`,'green')}
+        ${statCard('今週の報酬発生', weekCount,'名','× 1,000G','gold')}
+      </div>
+      <input id="gold-q" class="qsearch" value="${esc(goldQ)}" oninput="onGoldSearch(this.value)" placeholder="🔍 LINE名・氏名で検索">
+      <div class="dq"><div class="dq-inner"><table>
+        <thead><tr><th>冒険者</th><th>今週</th><th>累積G</th><th>受渡済</th><th>ストック残</th></tr></thead>
+        <tbody id="gold-body"></tbody></table></div></div>`;
+  renderGoldBody();
+}
+function renderGoldBody(){
+  const venue=STD_VENUE;
+  const list=MEMBERS.map(m=>({...m,_acc:getAccruedReward(m.id),_paid:getPaidTotal(m.id),_stock:getStock(m.id)}))
+    .filter(m=>(m._stock>0||m._paid>0)&&matchQ(m,goldQ)).sort((a,b)=>b._stock-a._stock);
+  const body=list.length?list.map(m=>{
+    const w=getWk(curMonth,curWeek,m.id),rw=w.result_ss&&!w.won_date&&w.apply!=null&&w.apply>=venue;
+    return `<tr>
+      <td data-label="冒険者"><b>${esc(m.line_name||'')}</b><div style="font-size:11px;color:var(--text3)">${esc(m.name||'—')}</div></td>
+      <td data-label="今週">${rw?'<span class="badge b-reward">+1,000G</span>':w.won_date?'<span class="badge b-drop">👑討伐</span>':'<span style="color:var(--text3)">—</span>'}</td>
+      <td data-label="累積G" class="mono" style="color:var(--text2)">${m._acc.toLocaleString()}G</td>
+      <td data-label="受渡済" class="mono" style="color:var(--rolex3)">${m._paid>0?m._paid.toLocaleString()+'G':'—'}</td>
+      <td data-label="ストック残" class="g" style="font-weight:700">${m._stock>0?m._stock.toLocaleString()+'G':'—'}</td>
+    </tr>`; }).join(''):`<tr><td><div class="empty"><div class="big">💰</div>該当する記録がありません</div></td></tr>`;
+  document.getElementById('gold-body').innerHTML=body;
+}
+function onGoldSearch(v){ goldQ=v; renderGoldBody(); }
+
+// ===== 討伐の間（当選者・月タブ） =====
+function renderHall(){
+  // 稼働月（availableMonths）＋当選のある月 をすべて選べるようにする（5月→5月の当選者…）
+  const months=[...new Set([...availableMonths, ...WIN_HISTORY.map(w=>w.month)].filter(x=>x!=null))].sort((a,b)=>b-a);
+  const tabs=[['thisweek',`今週（${curMonth}月第${curWeek}週）`]]
+    .concat(months.map(mo=>[String(mo),`${mo}月`]))
+    .concat([['all','全期間']]);
+  const tabHtml=tabs.map(([k,l])=>`<button class="pill ${hallFilter===k?'on':''}" onclick="setHallFilter('${k}')">${l}<span class="n">${hallCount(k)}</span></button>`).join('');
+  document.getElementById('s-hall').innerHTML =
+    bannerHtml()
+    + ph('🏆 討伐の<span class="em">間</span>（当選者）', `伝説のロレックスを討伐した者たちの記録　／　累計 ${WIN_HISTORY.length} 体`)
+    + `<div class="filters">${tabHtml}</div>`
+    + `<input id="hall-q" class="qsearch" value="${esc(hallQ)}" oninput="onHallSearch(this.value)" placeholder="🔍 当選者名で検索">`
+    + `<div class="dq"><div class="dq-inner"><table>
+        <thead><tr><th>討伐日</th><th>冒険者</th><th>ドロップ（店舗）</th><th>回数/月</th><th>ストック残</th></tr></thead>
+        <tbody id="hall-body"></tbody></table></div></div>`;
+  renderHallBody();
+}
+function renderHallBody(){
+  let wins;
+  if(hallFilter==='thisweek') wins=winnersOfWeek(curMonth,curWeek);
+  else if(hallFilter==='all') wins=[...WIN_HISTORY];
+  else wins=WIN_HISTORY.filter(w=>String(w.month)===hallFilter);
+  wins=wins.filter(w=>matchQ(w,hallQ)).sort((a,b)=>String(b.won_date||'').localeCompare(String(a.won_date||'')));
+  const body=wins.length?wins.map(w=>{
+    const stock=getStock(w.member_id);
+    return `<tr>
+      <td data-label="討伐日">${fmtDate(w.won_date)}</td>
+      <td data-label="冒険者"><b>${esc(w.line_name||'')}</b><div style="font-size:11px;color:var(--text3)">${esc(w.name||'—')}</div></td>
+      <td data-label="ドロップ"><span class="badge b-drop">👑 ${esc(w.shop||'討伐')}</span></td>
+      <td data-label="討伐回数" class="mono" style="color:var(--text2)">${w.win_num?w.win_num+'回目':(w.month?`${w.month}月`:'—')}</td>
+      <td data-label="ストック残" class="g">${stock>0?stock.toLocaleString()+'G':'—'}</td>
+    </tr>`; }).join(''):`<tr><td><div class="empty"><div class="big">🗡</div>${hallFilter==='thisweek'?'今週はまだ討伐者がいません':(hallQ?'該当する当選者がいません':'この期間の討伐記録はありません')}</div></td></tr>`;
+  document.getElementById('hall-body').innerHTML=body;
+}
+function hallCount(k){ if(k==='thisweek') return winnersOfWeek(curMonth,curWeek).length; if(k==='all') return WIN_HISTORY.length; return WIN_HISTORY.filter(w=>String(w.month)===k).length; }
+
+// ===== セグメント抽出（本番 index.html と同じプリセット・AND条件） =====
+let segMembers=[], _segCustomFn=null;
+const SEG_PRESETS={
+  all:{customFn:()=>true},
+  active_all:{customFn:m=>calcPriority(m)==='1:アクティブ'},
+  inactive_all:{customFn:m=>calcPriority(m)!=='1:アクティブ'},
+  unwon_active:{customFn:m=>m.status==='未当選'&&calcPriority(m)==='1:アクティブ'},
+  unwon_inactive:{customFn:m=>m.status==='未当選'&&calcPriority(m)!=='1:アクティブ'},
+  unwon_all:{customFn:m=>m.status==='未当選'},
+  won_active:{customFn:m=>(m.status==='1回当選済'||m.status==='2回当選済')&&calcPriority(m)==='1:アクティブ'},
+  won_inactive:{customFn:m=>(m.status==='1回当選済'||m.status==='2回当選済')&&calcPriority(m)!=='1:アクティブ'},
+  won1:{customFn:m=>m.status==='1回当選済'},
+  won2:{customFn:m=>m.status==='2回当選済'},
+  restriction:{customFn:m=>isRestricted(m)},
+  restricted_active:{customFn:m=>isRestricted(m)&&calcPriority(m)==='1:アクティブ'},
+  restricted_inactive:{customFn:m=>isRestricted(m)&&calcPriority(m)!=='1:アクティブ'},
+  no_last_active:{customFn:m=>(!m.last_active||String(m.last_active).replace(/[^0-9]/g,'').length<8)&&!m.won1&&!m.won2&&!m.won3},
+  has_last_active:{customFn:m=>!!m.last_active&&String(m.last_active).replace(/[^0-9]/g,'').length===8}
+};
+function renderSegment(){
+  const presets=[
+    ['all','全員',''],['active_all','アクティブ全員','var(--rolex3)'],['inactive_all','非アクティブ全員',''],
+    ['unwon_active','未当選 × アクティブ',''],['unwon_inactive','未当選 × 非アクティブ',''],['unwon_all','未当選（全員）',''],
+    ['won_active','当選済 × アクティブ','var(--gold2)'],['won_inactive','⚠ 当選済 × 非アクティブ','var(--red2)'],
+    ['won1','1回当選済（全員）',''],['won2','2回当選済（全員）',''],
+    ['restriction','制限中（全員）','var(--amber)'],['restricted_active','制限中 × アクティブ','var(--rolex3)'],['restricted_inactive','制限中 × 非アクティブ',''],
+    ['no_last_active','最終活動日なし',''],['has_last_active','最終活動日あり','']
+  ];
+  const presetHtml=presets.map(([k,l,c])=>`<button class="pill" data-preset="${k}" onclick="applyPreset('${k}')" style="${c?`color:${c}`:''}">${l}</button>`).join('');
+  document.getElementById('s-segment').innerHTML =
+    bannerHtml()
+    + ph('🎯 セグメント<span class="em">抽出</span>', 'AND条件で絞り込み → LINE一斉送信リスト（読み取り専用。出力のみ可）',
+        `<div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="exportSegCSV()">📥 CSV出力</button><button class="btn btn-gold" onclick="copyLineIds()">📋 LINE名コピー</button></div>`)
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">よく使う抽出パターン</span></span></div><div class="filters" id="seg-presets" style="margin:0">${presetHtml}</div></div></div>`
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner">
+        <div class="dq-head"><span class="t"><span class="pix">AND条件で絞り込み</span></span><span class="r" style="cursor:pointer" onclick="resetSegFilters()">↺ リセット</span></div>
+        <div class="seg-grid">
+          <div class="fld"><label>抽選ステータス</label><select class="qselect" id="sf-status" onchange="runSegment()"><option value="">すべて</option><option>未当選</option><option>1回当選済</option><option>2回当選済</option><option>3回当選済</option></select></div>
+          <div class="fld"><label>稼働状況</label><select class="qselect" id="sf-priority" onchange="runSegment()"><option value="">すべて</option><option value="1:アクティブ">アクティブ</option><option value="3:非アクティブ(未当選)">非アクティブ（未当選）</option><option value="2:非アクティブ(当選済)">非アクティブ（当選済）</option></select></div>
+          <div class="fld"><label>購入制限</label><select class="qselect" id="sf-restriction" onchange="runSegment()"><option value="">すべて</option><option value="restricted">制限中のみ</option><option value="free">制限なしのみ</option></select></div>
+          <div class="fld"><label>備考キーワード</label><input class="qinput" id="sf-note" placeholder="例: 5店舗以下" oninput="runSegment()"></div>
+          <div class="fld"><label>名前・LINE名</label><input class="qinput" id="sf-name" placeholder="部分一致で検索" oninput="runSegment()"></div>
+          <div class="fld"><label>最終活動日（以降）</label><input class="qinput" id="sf-active-from" placeholder="例: 20260101" oninput="runSegment()"></div>
+        </div>
+        <div id="seg-conditions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;min-height:18px"></div>
+      </div></div>`
+    + `<div class="two">
+        <div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">抽出結果</span> <span id="seg-count" style="color:var(--gold2);font-family:'DM Mono',monospace;font-size:17px;margin-left:4px">0</span> <span style="font-size:11px;color:var(--text3)">名</span></span><span class="r" style="cursor:pointer" onclick="copyLineIds()">📋 コピー</span></div><div class="seg-list" id="seg-list"></div></div></div>
+        <div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">メンバー詳細</span></span><span class="r">スクロールで全件</span></div><div style="max-height:340px;overflow:auto"><table><thead><tr><th>LINE名</th><th>氏名</th><th>状態</th><th>稼働</th><th>備考</th></tr></thead><tbody id="seg-tbody"></tbody></table></div></div></div>
+      </div>`;
+  _segCustomFn=SEG_PRESETS.all.customFn; setActivePreset('all'); runSegment();
+}
+function setActivePreset(key){ document.querySelectorAll('#seg-presets .pill').forEach(p=>p.classList.toggle('on', p.dataset.preset===key)); }
+function applyPreset(key){
+  ['sf-status','sf-priority','sf-restriction','sf-note','sf-name','sf-active-from'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  _segCustomFn=(SEG_PRESETS[key]||SEG_PRESETS.all).customFn||null; setActivePreset(key); runSegment();
+}
+function resetSegFilters(){
+  ['sf-status','sf-priority','sf-restriction','sf-note','sf-name','sf-active-from'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  _segCustomFn=null; setActivePreset('all'); runSegment();
+}
+function runSegment(){
+  const fStatus=document.getElementById('sf-status')?.value||'';
+  const fPriority=document.getElementById('sf-priority')?.value||'';
+  const fRestrict=document.getElementById('sf-restriction')?.value||'';
+  const fNote=(document.getElementById('sf-note')?.value||'').toLowerCase();
+  const fName=(document.getElementById('sf-name')?.value||'').toLowerCase();
+  const fActiveFrom=(document.getElementById('sf-active-from')?.value||'').replace(/[^0-9]/g,'');
+  segMembers=MEMBERS.filter(m=>{
+    if(_segCustomFn&&!_segCustomFn(m)) return false;
+    if(fStatus&&m.status!==fStatus) return false;
+    if(fPriority&&calcPriority(m)!==fPriority) return false;
+    if(fRestrict==='restricted'&&!isRestricted(m)) return false;
+    if(fRestrict==='free'&&isRestricted(m)) return false;
+    if(fNote&&!(m.note||'').toLowerCase().includes(fNote)) return false;
+    if(fName){ const hay=((m.line_name||'')+' '+(m.name||'')).toLowerCase(); if(!hay.includes(fName)) return false; }
+    if(fActiveFrom){ const la=String(m.last_active||'').replace(/[^0-9]/g,'').slice(0,8); if(!la||la<fActiveFrom) return false; }
+    return true;
+  });
+  const conds=[];
+  if(fStatus) conds.push(`ステータス:${fStatus}`);
+  if(fPriority) conds.push(`稼働:${fPriority.replace(/[0-9:]/g,'').trim()}`);
+  if(fRestrict) conds.push(fRestrict==='restricted'?'制限中のみ':'制限なしのみ');
+  if(fNote) conds.push(`備考:"${fNote}"`);
+  if(fName) conds.push(`名前:"${fName}"`);
+  if(fActiveFrom) conds.push(`活動日:${fmtDate(fActiveFrom)}以降`);
+  const ce=document.getElementById('seg-conditions');
+  if(ce) ce.innerHTML = conds.length? conds.map(c=>`<span class="badge b-gray">${esc(c)}</span>`).join('<span style="font-size:10px;color:var(--text3);padding:0 2px">AND</span>') : '<span style="font-size:11px;color:var(--text3)">条件なし（全件対象）</span>';
+  document.getElementById('seg-count').textContent=segMembers.length;
+  document.getElementById('seg-list').textContent=segMembers.map(m=>m.line_name).join('\n');
+  document.getElementById('seg-tbody').innerHTML=segMembers.map(m=>{
+    const tt=rankTitle(m),rest=isRestricted(m),active=isActiveM(m);
+    return `<tr>
+      <td data-label="LINE名" class="mono" style="font-size:12px">${esc(m.line_name||'')}</td>
+      <td data-label="氏名" style="font-size:12px">${esc(m.name||'—')}</td>
+      <td data-label="状態"><span class="badge b-reward">${tt.ic} ${esc(m.status||'—')}</span></td>
+      <td data-label="稼働">${active?'<span class="badge b-done">⚡</span>':'<span class="badge b-gray">💤</span>'}${rest?' <span class="badge b-ail">🛡</span>':''}</td>
+      <td data-label="備考" style="font-size:11px;color:var(--text3)">${esc(m.note||'')}</td>
+    </tr>`;
+  }).join('') || `<tr><td><div class="empty" style="padding:24px"><div class="big">🔍</div>該当者がいません</div></td></tr>`;
+}
+function copyLineIds(){
+  if(!segMembers.length){ toast('抽出結果がありません'); return; }
+  const text=segMembers.map(m=>m.line_name).join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(()=>toast(`✓ ${segMembers.length}名のLINE名をコピーしました`)).catch(()=>fallbackCopy(text));
+  else fallbackCopy(text);
+}
+function fallbackCopy(text){ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); toast('✓ コピーしました'); }catch(e){ toast('コピーできませんでした'); } document.body.removeChild(ta); }
+function exportSegCSV(){
+  if(!segMembers.length){ toast('抽出結果がありません'); return; }
+  const rows=[['LINE名','氏名','ステータス','稼働','制限','累積G','ストック残','備考']];
+  segMembers.forEach(m=>rows.push([m.line_name,m.name||'',m.status||'',isActiveM(m)?'アクティブ':'非アクティブ',isRestricted(m)?'制限中':'',getAccruedReward(m.id),getStock(m.id),m.note||'']));
+  dlCSV(rows,'segment.csv'); toast(`📥 ${segMembers.length}名をCSV出力しました`);
+}
+function dlCSV(rows,filename){
+  const csv=rows.map(r=>r.map(c=>{ c=String(c==null?'':c); return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+// ===== バックアップ（保存＝ダウンロード ／ 読み込み＝表示のみ・本番DBは書き換えない） =====
+function renderBackup(){
+  const summary=`メンバー ${MEMBERS.length}名 ・ 週次入力 ${Object.keys(WEEKLY).length}件 ・ 当選 ${WIN_HISTORY.length}件 ・ 支払い ${PAYMENTS.length}件`;
+  document.getElementById('s-backup').innerHTML =
+    bannerHtml()
+    + ph('💾 データ<span class="em">保全</span>', 'バックアップの保存と読み込み。大事な節目には手元に保存しておくと安心です。')
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner">
+        <div class="dq-head"><span class="t"><span class="pix">📥 バックアップを保存</span></span></div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:6px">いま読み込まれている全データを JSON ファイルとして書き出します。</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:13px">${summary}</div>
+        <button class="btn btn-gold" onclick="exportBackup()">📥 バックアップをダウンロード</button>
+      </div></div>`
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner">
+        <div class="dq-head"><span class="t"><span class="pix">📤 バックアップを読み込む</span></span></div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:13px">保存した JSON を選ぶと、この画面の表示が読み込んだ内容に切り替わります（中身の確認用）。</div>
+        <label class="btn btn-quest" style="cursor:pointer">📤 ファイルを選んで読み込み<input type="file" accept="application/json,.json" onchange="restoreFromBackup(this)" style="display:none"></label>
+        <div class="banner" style="margin:14px 0 0;background:rgba(224,92,110,.07);border-color:rgba(224,92,110,.3)">⚠ この読み込みは<b>表示の確認用</b>です。Supabase（本番データ）には書き込みません。実際にデータを「復元（上書き）」したい場合は、取り違え事故防止のため、本番ツール側の復元機能を使うか、わたしに声をかけてください（件数を確認のうえ安全に行います）。</div>
+      </div></div>`
+    + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">ℹ バックアップについて</span></span></div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.9">・本番データは Supabase に保存されています。<br>・本番ツール（メインのロレクエ）にも自動バックアップ機能があります。<br>・月末・大量更新の前などの節目に、このボタンで JSON を手元保存しておくのがおすすめです。</div></div></div>`;
+}
+function exportBackup(){
+  const data={MEMBERS,WEEKLY,WIN_HISTORY,PURCHASE,STORE_PURCHASES,PAYMENTS,curMonth,curWeek,availableMonths,savedAt:new Date().toISOString(),source:'loreque-quest'};
+  const d=new Date();
+  const stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`loreque_backup_${stamp}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('📥 バックアップを保存しました');
+}
+function restoreFromBackup(input){
+  const file=input.files&&input.files[0]; if(!file){ return; }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(!d||!Array.isArray(d.MEMBERS)){ toast('⚠ バックアップ形式が正しくありません'); return; }
+      MEMBERS=d.MEMBERS||[]; WEEKLY=d.WEEKLY||{}; WIN_HISTORY=d.WIN_HISTORY||[]; PURCHASE=d.PURCHASE||{}; STORE_PURCHASES=d.STORE_PURCHASES||[]; PAYMENTS=d.PAYMENTS||[];
+      if(d.curMonth) curMonth=d.curMonth; if(d.curWeek) curWeek=d.curWeek; if(Array.isArray(d.availableMonths)) availableMonths=d.availableMonths;
+      restoreMode=true; SAMPLE_MODE=false;
+      document.getElementById('user-email').textContent='バックアップ表示';
+      go('home');
+      toast(`📤 バックアップを読み込みました（${MEMBERS.length}名・表示のみ）`);
+    }catch(err){ toast('⚠ 読み込みに失敗しました（JSONを確認してください）'); }
+  };
+  reader.readAsText(file);
+  input.value='';
+}
+
+function emptyParty(plain){ const inner=`<div class="big">👋</div>まだ仲間がいません。<br><span style="font-size:12px">本番ツールの「メンバー管理」で登録すると、ここに反映されます。</span>`; return `<div class="empty">${inner}</div>`; }
+
+function setMonth(mo){ curMonth=mo; renderWeekly(); }
+function setWeek(wk){ curWeek=wk; renderWeekly(); }
+function setWeeklyFilter(k){ weeklyFilter=k; renderWeekly(); }
+function setPartyFilter(k){ partyFilter=k; renderParty(); }
+function setHallFilter(k){ hallFilter=k; renderHall(); }
+
+// 当選演出
+function demoWin(){ const w=[...WIN_HISTORY].sort((a,b)=>String(b.won_date||'').localeCompare(String(a.won_date||'')))[0];
+  openWin(w?(w.line_name||w.name):'冒険者', w?w.shop:'ロレックス', w?getStock(w.member_id):12000); }
+function openWin(name,shop,stock){
+  document.getElementById('win-body').innerHTML=
+    `<div class="fan">⚔ ＲＡＲＥ ＤＲＯＰ ⚔</div><div class="crown">👑</div>
+     <h2><span class="pix">レアドロップ！</span></h2>
+     <div class="item">${esc(name)} が「${esc(shop||'ロレックス')}」を討伐した！</div>
+     <div class="loot">報酬ストック残 <b>¥${(stock>0?stock:0).toLocaleString()}</b> ／ 受け渡しへ</div>
+     <button class="btn btn-gold" onclick="closeWin()">▶ おめでとう 🎉</button>`;
+  document.getElementById('ov').classList.add('show');
+}
+function closeWin(){ document.getElementById('ov').classList.remove('show'); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.className='show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='',2400); }
+
+// ================================================================
+// Supabase 読み込み（読み取り専用）／認証
+// ================================================================
+async function loadFromSupabase(){
+  if(!supabaseClient) return false;
+  try{
+    const [{data:members,error:er1},{data:weekly},{data:wins},{data:purchases},{data:stores},{data:pays},{data:config}] = await Promise.all([
+      supabaseClient.from('lq_members').select('*').order('id'),
+      supabaseClient.from('lq_weekly_inputs').select('*'),
+      supabaseClient.from('lq_win_history').select('*').order('id'),
+      supabaseClient.from('lq_purchase_results').select('*'),
+      supabaseClient.from('lq_store_purchases').select('*').order('id'),
+      supabaseClient.from('lq_reward_payments').select('*').order('id'),
+      supabaseClient.from('lq_app_config').select('*').eq('key','main').single()
+    ]);
+    if(er1) return false;
+    MEMBERS.length=0; (members||[]).forEach(m=>MEMBERS.push(m));
+    Object.keys(WEEKLY).forEach(k=>delete WEEKLY[k]);
+    (weekly||[]).forEach(row=>{ WEEKLY[`${row.month}-${row.week}-${row.member_id}`]={apply:row.apply,result_ss:row.result_ss,won_date:row.won_date,won_shop:row.won_shop,restricted_applied:row.restricted_applied,restricted_result:row.restricted_result}; });
+    WIN_HISTORY.length=0; (wins||[]).forEach(w=>{ const{id,...rest}=w; WIN_HISTORY.push(rest); });
+    Object.keys(PURCHASE).forEach(k=>delete PURCHASE[k]);
+    (purchases||[]).forEach(p=>{ const{win_idx,...rest}=p; PURCHASE[win_idx]=rest; });
+    STORE_PURCHASES.length=0; (stores||[]).forEach(s=>STORE_PURCHASES.push(s));
+    PAYMENTS.length=0; (pays||[]).forEach(p=>PAYMENTS.push(p));
+    if(config){ curMonth=config.cur_month||curMonth; curWeek=config.cur_week||curWeek; if(config.available_months) availableMonths=config.available_months; }
+    if(!availableMonths.includes(curMonth)){ availableMonths.push(curMonth); availableMonths.sort((a,b)=>a-b); }
+    return true;
+  }catch(err){ console.warn('Supabase読み込みエラー:',err); return false; }
+}
+function signInWithGoogle(){ if(!supabaseClient){ toast('Supabase未初期化'); return; } supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.href } }); }
+async function signOut(){ if(supabaseClient) await supabaseClient.auth.signOut(); location.reload(); }
+function showApp(){ document.getElementById('app').style.visibility='visible'; document.getElementById('login').style.display='none'; }
+function showLogin(){ document.getElementById('app').style.visibility='hidden'; document.getElementById('login').style.display='flex'; }
+
+// ================================================================
+// サンプルデータ（ローカル確認用・ダミー）
+// ================================================================
+let SAMPLE_MODE=false;
+function loadSample(){
+  SAMPLE_MODE=true; curMonth=6; curWeek=2; availableMonths=[5,6];
+  MEMBERS=[
+    {id:1,line_name:'☆のり☆',name:'榎本紀枝',status:'未当選',last_active:'20260610',no_purchase:false,note:''},
+    {id:2,line_name:'AKEN♾️',name:'中川明美',status:'1回当選済',won1:'20251224',last_active:'20260609',no_purchase:false,note:''},
+    {id:3,line_name:'0201',name:'鹿沼康夫',status:'未当選',last_active:'20260608',no_purchase:false,note:''},
+    {id:4,line_name:'ERI',name:'稲見江利子',status:'1回当選済',won1:'20260610',last_active:'20260610',no_purchase:false,note:'今週討伐'},
+    {id:5,line_name:'Hero⑤',name:'吉田博子',status:'未当選',last_active:'20260607',no_purchase:true,note:'買えなかった方'},
+    {id:6,line_name:'hide21',name:'橋本秀人',status:'2回当選済',won1:'20251104',won2:'20260128',last_active:'20260101',no_purchase:false,note:''},
+    {id:7,line_name:'sakura',name:'田中咲',status:'未当選',last_active:'20260101',no_purchase:false,note:'休止中'},
+    {id:8,line_name:'kaori_m',name:'松本香織',status:'1回当選済',won1:'20260513',last_active:'20260513',no_purchase:false,note:'5月当選'}
+  ];
+  WEEKLY={};
+  const set=(mo,wk,id,o)=>WEEKLY[`${mo}-${wk}-${id}`]=Object.assign({apply:null,result_ss:false,won_date:null,won_shop:null},o);
+  set(6,2,1,{apply:5,result_ss:false}); set(6,2,2,{apply:5,result_ss:true}); set(6,2,3,{apply:3,result_ss:false});
+  set(6,2,4,{apply:5,result_ss:true,won_date:'20260610',won_shop:'銀座本店'}); set(6,2,5,{apply:5,result_ss:true});
+  set(6,1,1,{apply:5,result_ss:true}); set(5,1,1,{apply:5,result_ss:true}); set(5,2,1,{apply:4,result_ss:true});
+  set(6,1,2,{apply:5,result_ss:true}); set(5,2,2,{apply:5,result_ss:true});
+  set(6,1,5,{apply:5,result_ss:true}); set(5,1,5,{apply:5,result_ss:true}); set(5,1,3,{apply:5,result_ss:true});
+  WIN_HISTORY=[
+    {member_id:4,line_name:'ERI',name:'稲見江利子',won_date:'20260610',shop:'銀座本店',win_num:1,month:6,week:2},
+    {member_id:2,line_name:'AKEN♾️',name:'中川明美',won_date:'20251224',shop:'表参道',win_num:1,month:12,week:4},
+    {member_id:6,line_name:'hide21',name:'橋本秀人',won_date:'20260128',shop:'新宿',win_num:2,month:1,week:4},
+    {member_id:8,line_name:'kaori_m',name:'松本香織',won_date:'20260513',shop:'名古屋',win_num:1,month:5,week:2}
+  ];
+  PAYMENTS=[{id:1,member_id:6,amount:8000,paid_date:'20260201',note:''}];
+  PURCHASE={}; STORE_PURCHASES=[]; hallFilter='thisweek';
+  document.getElementById('user-email').textContent='サンプル表示';
+  showApp(); go('home'); toast('🎲 サンプルデータを表示しています');
+}
+
+// ================================================================
+// 起動
+// ================================================================
+async function init(){
+  try{ supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+  catch(e){ showLogin(); return; }
+  const { data:{ session } } = await supabaseClient.auth.getSession();
+  if(!session){ showLogin(); return; }
+  document.getElementById('user-email').textContent = session.user?.email || '';
+  showApp();
+  const ok = await loadFromSupabase();
+  toast(ok?'☁ Supabaseから実データを読み込みました':'データ読み込みに失敗（権限/通信を確認）');
+  hallFilter='thisweek'; go('home');
+}
+init();
+</script>
+</body>
+</html>
