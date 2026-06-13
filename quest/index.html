@@ -661,9 +661,9 @@ function confirmDeleteMember(){
   }
   closeModal('modal-edit-member'); toast(`${m.name||m.line_name} を削除しました`); afterMemberEdit();
 }
-// Supabase 全保存（本番 index.html と同一ロジック）
+// Supabase 全保存（本番 index.html と同一ロジック）。成否を true/false で返す。
 async function saveToSupabase(){
-  if(!supabaseClient) return;
+  if(!supabaseClient) return false;
   try{
     if(MEMBERS.length>0){ const {error}=await supabaseClient.from('lq_members').upsert(MEMBERS,{onConflict:'id'}); if(error) throw error; }
     const weeklyRows=Object.entries(WEEKLY).map(([k,v])=>{ const p=k.split('-'); return {month:parseInt(p[0]),week:parseInt(p[1]),member_id:parseInt(p[2]),...v}; });
@@ -676,7 +676,8 @@ async function saveToSupabase(){
     if(STORE_PURCHASES.length>0){ const {error}=await supabaseClient.from('lq_store_purchases').upsert(STORE_PURCHASES,{onConflict:'id'}); if(error) throw error; }
     if(PAYMENTS.length>0){ const {error}=await supabaseClient.from('lq_reward_payments').upsert(PAYMENTS,{onConflict:'id'}); if(error) throw error; }
     const {error}=await supabaseClient.from('lq_app_config').upsert({key:'main',cur_month:curMonth,cur_week:curWeek,available_months:availableMonths},{onConflict:'key'}); if(error) throw error;
-  }catch(err){ console.warn('Supabase保存エラー:',err); toast('⚠ 保存に失敗しました（通信/権限を確認）'); }
+    return true;
+  }catch(err){ console.warn('Supabase保存エラー:',err); toast('⚠ 保存に失敗しました（通信/権限を確認）'); return false; }
 }
 
 // ================================================================
@@ -1072,10 +1073,15 @@ function renderBackup(){
         <button class="btn btn-gold" onclick="exportBackup()">📥 バックアップをダウンロード</button>
       </div></div>`
     + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner">
-        <div class="dq-head"><span class="t"><span class="pix">📤 バックアップを読み込む</span></span></div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:13px">保存した JSON を選ぶと、この画面の表示が読み込んだ内容に切り替わります（中身の確認用）。</div>
-        <label class="btn btn-quest" style="cursor:pointer">📤 ファイルを選んで読み込み<input type="file" accept="application/json,.json" onchange="restoreFromBackup(this)" style="display:none"></label>
-        <div class="banner" style="margin:14px 0 0;background:rgba(224,92,110,.07);border-color:rgba(224,92,110,.3)">⚠ この読み込みは<b>表示の確認用</b>です。Supabase（本番データ）には書き込みません。実際にデータを「復元（上書き）」したい場合は、取り違え事故防止のため、本番ツール側の復元機能を使うか、わたしに声をかけてください（件数を確認のうえ安全に行います）。</div>
+        <div class="dq-head"><span class="t"><span class="pix">🔁 バックアップから復元</span></span><span class="r">Supabaseに上書き</span></div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:13px">保存したJSONを選ぶと、<b>件数を確認したうえで</b>Supabaseの現在のデータを上書き復元します。データが壊れた時の復旧用です。</div>
+        <label class="btn btn-gold" style="cursor:pointer">🔁 復元用ファイルを選ぶ<input type="file" accept="application/json,.json" onchange="restoreToSupabase(this)" style="display:none"></label>
+        <div class="banner" style="margin:14px 0 0;background:rgba(224,92,110,.07);border-color:rgba(224,92,110,.3)">⚠ <b>現在のデータを上書きします</b>（元に戻せません）。実行前に「メンバー◯名／週次◯件…」と件数が表示されるので、確認してから「上書き復元する」を押してください。<br>※ 実データにログインしている時のみ実行できます。ログイン後にこのブラウザで開いてください。</div>
+      </div></div>`
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner">
+        <div class="dq-head"><span class="t"><span class="pix">👁 表示だけして中身を確認</span></span><span class="r">DB非書込</span></div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:13px">JSONの中身をこの画面に表示するだけ（Supabaseには書き込みません）。復元する前に中身を見たい時に。</div>
+        <label class="btn btn-ghost" style="cursor:pointer">👁 表示だけ確認する<input type="file" accept="application/json,.json" onchange="restoreFromBackup(this)" style="display:none"></label>
       </div></div>`
     + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">ℹ バックアップについて</span></span></div>
         <div style="font-size:12px;color:var(--text3);line-height:1.9">・本番データは Supabase に保存されています。<br>・本番ツール（メインのロレクエ）にも自動バックアップ機能があります。<br>・月末・大量更新の前などの節目に、このボタンで JSON を手元保存しておくのがおすすめです。</div></div></div>`;
@@ -1102,6 +1108,27 @@ function restoreFromBackup(input){
       go('home');
       toast(`📤 バックアップを読み込みました（${MEMBERS.length}名・表示のみ）`);
     }catch(err){ toast('⚠ 読み込みに失敗しました（JSONを確認してください）'); }
+  };
+  reader.readAsText(file);
+  input.value='';
+}
+// 本当の復元：バックアップ → Supabase に上書き保存（確認つき・ログイン時のみ）
+function restoreToSupabase(input){
+  const file=input.files&&input.files[0]; if(!file){ return; }
+  if(!liveData){ toast('⚠ 実データにログインしてから復元してください（サンプル/ローカルでは復元できません）'); input.value=''; return; }
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    let d; try{ d=JSON.parse(e.target.result); }catch(err){ toast('⚠ JSONを読み込めませんでした'); return; }
+    if(!d||!Array.isArray(d.MEMBERS)){ toast('⚠ バックアップ形式が正しくありません'); return; }
+    const cnt=`メンバー ${d.MEMBERS.length}名 / 週次 ${d.WEEKLY?Object.keys(d.WEEKLY).length:0}件 / 当選 ${(d.WIN_HISTORY||[]).length}件 / 支払い ${(d.PAYMENTS||[]).length}件`;
+    if(!confirm(`このバックアップで Supabase の現在のデータを上書き復元します。\n\n${cnt}\n\n※ バックアップ以降に追加されたメンバー・記録は残ります（消えません）。\nこの操作は元に戻せません。実行しますか？`)){ input.value=''; return; }
+    MEMBERS=d.MEMBERS||[]; WEEKLY=d.WEEKLY||{}; WIN_HISTORY=d.WIN_HISTORY||[]; PURCHASE=d.PURCHASE||{}; STORE_PURCHASES=d.STORE_PURCHASES||[]; PAYMENTS=d.PAYMENTS||[];
+    if(d.curMonth) curMonth=d.curMonth; if(d.curWeek) curWeek=d.curWeek; if(Array.isArray(d.availableMonths)) availableMonths=d.availableMonths;
+    restoreMode=false;
+    toast('⏳ 復元中… Supabaseに書き戻しています');
+    const ok=await saveToSupabase();
+    toast(ok?'✅ バックアップから復元しました':'⚠ 復元の保存に失敗しました（通信/権限を確認）');
+    go('home');
   };
   reader.readAsText(file);
   input.value='';
