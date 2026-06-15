@@ -329,7 +329,7 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
     </nav>
     <div class="sidebar-footer">
       <span class="em" id="user-email"></span>
-      <span class="sb-link" onclick="signOut()">ログアウト</span>　·　<span style="color:var(--text3)">読み取り専用</span>
+      <span class="sb-link" onclick="signOut()">ログアウト</span>　·　<span id="rw-status" style="color:var(--text3)">—</span>
     </div>
   </aside>
 
@@ -963,7 +963,15 @@ const RENDER={home:renderHome, weekly:renderWeekly, party:renderParty, gold:rend
 function go(s){
   document.querySelectorAll('.nav-item,.mnav-item').forEach(n=>n.classList.toggle('active', n.dataset.s===s));
   document.querySelectorAll('.screen').forEach(el=>el.classList.toggle('on', el.id===('s-'+s)));
-  RENDER[s](); window.scrollTo(0,0);
+  RENDER[s](); updateRwStatus(); window.scrollTo(0,0);
+}
+// サイドバー下部の状態表示（編集可 / 閲覧のみ）を実態に合わせて更新
+function updateRwStatus(){
+  const el=document.getElementById('rw-status'); if(!el) return;
+  if(liveData) el.innerHTML='<span style="color:var(--rolex3)">✏ 編集可・自動保存</span>';
+  else if(SAMPLE_MODE) el.innerHTML='<span style="color:var(--amber)">サンプル（保存なし）</span>';
+  else if(restoreMode) el.innerHTML='<span style="color:var(--text2)">表示のみ</span>';
+  else el.innerHTML='<span style="color:var(--text3)">閲覧のみ</span>';
 }
 let restoreMode=false;
 function bannerHtml(){
