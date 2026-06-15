@@ -239,9 +239,9 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   .mtop .bt .pix{background:linear-gradient(180deg,var(--gold3),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;}
   .mtop .out{margin-left:auto;font-size:11px;color:var(--text3);text-decoration:underline;}
   /* 下部タブバー */
-  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:200;height:62px;
+  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:200;height:62px;overflow-x:auto;-webkit-overflow-scrolling:touch;
     background:linear-gradient(180deg,#fbf5e6,#f0e4ca);border-top:1px solid var(--border2);padding-bottom:env(safe-area-inset-bottom);}
-  .mnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--text3);cursor:pointer;font-size:9px;}
+  .mnav-item{flex:1 0 auto;min-width:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--text3);cursor:pointer;font-size:9px;}
   .mnav-item .ic{font-size:17px;line-height:1;}
   .seg-grid{grid-template-columns:1fr 1fr;}
   .mnav-item.active{color:var(--gold2);}
@@ -321,6 +321,7 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
       <div class="nav-section">ほうしゅう・きろく</div>
       <div class="nav-item" data-s="gold" onclick="go('gold')"><span class="ic">💰</span>ゴールド管理</div>
       <div class="nav-item" data-s="hall" onclick="go('hall')"><span class="ic">🏆</span>討伐の間（当選者）</div>
+      <div class="nav-item" data-s="purchase" onclick="go('purchase')"><span class="ic">📦</span>購入管理</div>
       <div class="nav-section">ちゅうしゅつ</div>
       <div class="nav-item" data-s="segment" onclick="go('segment')"><span class="ic">🎯</span>セグメント抽出</div>
       <div class="nav-section">データ</div>
@@ -339,6 +340,7 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
     <div class="screen" id="s-gold"></div>
     <div class="screen" id="s-hall"></div>
     <div class="screen" id="s-segment"></div>
+    <div class="screen" id="s-purchase"></div>
     <div class="screen" id="s-backup"></div>
   </main>
 </div>
@@ -350,6 +352,7 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   <div class="mnav-item" data-s="party" onclick="go('party')"><span class="ic">👥</span>パーティー</div>
   <div class="mnav-item" data-s="gold" onclick="go('gold')"><span class="ic">💰</span>報酬</div>
   <div class="mnav-item" data-s="hall" onclick="go('hall')"><span class="ic">🏆</span>当選者</div>
+  <div class="mnav-item" data-s="purchase" onclick="go('purchase')"><span class="ic">📦</span>購入</div>
   <div class="mnav-item" data-s="segment" onclick="go('segment')"><span class="ic">🎯</span>抽出</div>
 </nav>
 
@@ -362,7 +365,7 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   <div class="modal-box"><div class="modal-in">
     <div style="text-align:center;font-size:40px">🎉</div>
     <h3 id="won-name"></h3>
-    <div class="modal-sub">当選おめでとう！ドロップした店舗を選んでください</div>
+    <div class="modal-sub" id="won-sub">当選おめでとう！ドロップした店舗を選んでください</div>
     <div id="won-stock" style="text-align:center;font-size:12px;margin:-4px 0 14px"></div>
     <div class="shop-grid" id="shop-grid"></div>
     <div style="margin-bottom:12px"><label class="form-label">または店舗名を直接入力</label><input class="form-input" id="won-shop-input" placeholder="例: 銀座本店 / その他の店舗名"></div>
@@ -422,6 +425,72 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
     </div>
     <div style="margin-bottom:4px"><label class="form-label">備考</label><input class="form-input" id="edit-note"></div>
     <div class="modal-foot"><button class="btn btn-ghost" style="border-color:rgba(224,92,110,.4);color:var(--red2)" onclick="confirmDeleteMember()">削除</button><div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal('modal-edit-member')">キャンセル</button><button class="btn btn-gold" onclick="saveEditMember()">保存</button></div>
+  </div></div>
+</div>
+
+<!-- 報酬支払い登録モーダル -->
+<div class="modal-ov" id="modal-payment" onclick="if(event.target===this)closeModal('modal-payment')">
+  <div class="modal-box"><div class="modal-in">
+    <h3>💴 報酬の支払い登録</h3>
+    <input type="hidden" id="pay-member-id">
+    <div id="pay-member-info" style="font-size:13px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:14px;line-height:1.6"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="form-label">支払金額（円）</label><input class="form-input" id="pay-amount" type="number" step="1000" min="0"></div>
+      <div><label class="form-label">支払日</label><input class="form-input" id="pay-date" placeholder="例: 20260616"></div>
+    </div>
+    <div style="margin-bottom:4px"><label class="form-label">備考</label><input class="form-input" id="pay-note" placeholder="まとめ払い など"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('modal-payment')">キャンセル</button><button class="btn btn-gold" onclick="savePayment()">💴 支払いを登録</button></div>
+  </div></div>
+</div>
+
+<!-- 当選日修正モーダル -->
+<div class="modal-ov" id="modal-edit-won-date" onclick="if(event.target===this)closeModal('modal-edit-won-date')">
+  <div class="modal-box" style="width:400px"><div class="modal-in">
+    <h3>✎ 当選日を修正</h3>
+    <div class="modal-sub">過去週を遡って入力した時などに修正できます</div>
+    <input type="hidden" id="ewd-member-id"><input type="hidden" id="ewd-month"><input type="hidden" id="ewd-week">
+    <div style="margin-bottom:12px"><label class="form-label">当選日（YYYYMMDD）</label><input class="form-input" id="ewd-date" placeholder="例: 20260318"></div>
+    <div style="margin-bottom:4px"><label class="form-label">店舗</label><input class="form-input" id="ewd-shop" placeholder="例: 名古屋"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('modal-edit-won-date')">キャンセル</button><button class="btn btn-gold" onclick="saveEditWonDate()">保存</button></div>
+  </div></div>
+</div>
+
+<!-- 買付結果登録モーダル -->
+<div class="modal-ov" id="modal-purchase" onclick="if(event.target===this)closeModal('modal-purchase')">
+  <div class="modal-box" style="width:480px"><div class="modal-in">
+    <h3>📦 買付結果を登録</h3>
+    <div class="modal-sub" id="pur-info"></div>
+    <input type="hidden" id="pur-idx">
+    <div id="pur-rmemo-wrap" style="display:none;margin-bottom:12px"><label class="form-label">制限中メモ（同行補助の相手・状況）</label><input class="form-input" id="pur-rmemo" placeholder="補助した相手・状況など"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="form-label">買付結果</label><select class="form-input" id="pur-result" onchange="purToggleSuccess()"><option value="success">✓ 成功</option><option value="fail">✗ 失敗</option><option value="cancel">— キャンセル</option></select></div>
+      <div><label class="form-label">買付日</label><input class="form-input" id="pur-date" placeholder="例: 20260325"></div>
+    </div>
+    <div id="pur-success" style="border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:12px">
+      <div style="margin-bottom:10px"><label class="form-label">購入台数（本人）</label><select class="form-input" id="pur-units"><option>1</option><option>2</option></select></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">同行者がいた場合（メンバー外も可）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div><label class="form-label">同行者名</label><input class="form-input" id="pur-comp"></div>
+        <div><label class="form-label">同行者結果</label><select class="form-input" id="pur-comp-result"><option value="">—</option><option value="success">成功</option><option value="fail">失敗</option></select></div>
+        <div><label class="form-label">同行者台数</label><select class="form-input" id="pur-comp-units"><option value="0">—</option><option value="1">1</option><option value="2">2</option></select></div>
+      </div>
+    </div>
+    <div style="margin-bottom:4px"><label class="form-label">備考</label><input class="form-input" id="pur-note" placeholder="在庫状況・メモなど"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('modal-purchase')">キャンセル</button><button class="btn btn-gold" onclick="savePurchase()">保存</button></div>
+  </div></div>
+</div>
+
+<!-- 店舗買付登録モーダル -->
+<div class="modal-ov" id="modal-store-purchase" onclick="if(event.target===this)closeModal('modal-store-purchase')">
+  <div class="modal-box" style="width:480px"><div class="modal-in">
+    <h3>🏬 店舗買付を登録</h3>
+    <div class="modal-sub">抽選を経由しない直接購入。成功で買付日から6ヶ月の制限が始まります</div>
+    <div style="margin-bottom:12px"><label class="form-label">LINE名 or 氏名 <span style="color:var(--red2)">*</span></label><input class="form-input" id="sp-member-name" list="sp-member-list" placeholder="メンバーのLINE名/氏名"><datalist id="sp-member-list"></datalist></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px"><div><label class="form-label">買付日 *</label><input class="form-input" id="sp-purchase-date" placeholder="例: 20260325"></div><div><label class="form-label">結果</label><select class="form-input" id="sp-result"><option value="success">✓ 成功</option><option value="fail">✗ 失敗</option><option value="cancel">— キャンセル</option></select></div></div>
+    <div style="margin-bottom:12px"><label class="form-label">店舗</label><div class="shop-grid" id="sp-shop-grid"></div><input class="form-input" id="sp-shop-input" placeholder="店舗名（直接入力も可）"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px"><div><label class="form-label">台数</label><select class="form-input" id="sp-units"><option>1</option><option>2</option></select></div><div><label class="form-label">同行者</label><input class="form-input" id="sp-companion"></div></div>
+    <div style="margin-bottom:4px"><label class="form-label">備考</label><input class="form-input" id="sp-note"></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('modal-store-purchase')">キャンセル</button><button class="btn btn-gold" onclick="saveStorePurchase()">保存</button></div>
   </div></div>
 </div>
 
@@ -521,7 +590,7 @@ function winnersPanelHtml(mo,wk,title){
 // 入力（書き込み）— 認証済みの実データ時のみ Supabase に保存。
 // サンプル/バックアップ表示中（liveData=false）は画面上の操作のみで保存しない。
 // ================================================================
-let liveData=false, wonTarget=null;
+let liveData=false, wonTarget=null, wonCompanion=false;
 function today(){ const d=new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`; }
 function thisWeekWednesday(){
   const d=new Date(),day=d.getDay(); let diff;
@@ -537,7 +606,10 @@ function getSelectedWeekWednesday(month,weekNum){
 }
 function curWeekWednesday(){ const t=thisWeekWednesday(),s=getSelectedWeekWednesday(curMonth,curWeek); return s<=t?s:t; }
 function closeModal(id){ const el=document.getElementById(id); if(el) el.classList.remove('show'); }
-function saveQuest(){ if(liveData) saveToSupabase(); }
+const LS_KEY='loreque_quest_autobak';
+function localSnapshot(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({MEMBERS,WEEKLY,WIN_HISTORY,PURCHASE,STORE_PURCHASES,PAYMENTS,curMonth,curWeek,availableMonths,savedAt:new Date().toISOString()})); }catch(e){} }
+function lastSnapshotTime(){ try{ const r=localStorage.getItem(LS_KEY); if(!r) return null; return (JSON.parse(r)||{}).savedAt||null; }catch(e){ return null; } }
+function saveQuest(){ if(liveData){ localSnapshot(); saveToSupabase(); } }
 function afterEdit(){ if(document.getElementById('s-weekly').classList.contains('on')) renderWeekly(); saveQuest(); }
 
 function ensureWk(memberId){ const key=getWkKey(curMonth,curWeek,memberId); if(!WEEKLY[key]) WEEKLY[key]={apply:null,result_ss:false,won_date:null,won_shop:null}; return key; }
@@ -559,7 +631,8 @@ function setResult(memberId,val){
   afterEdit();
 }
 function openWonModal(memberId){
-  const m=MEMBERS.find(x=>x.id===memberId); if(!m) return; wonTarget=memberId;
+  const m=MEMBERS.find(x=>x.id===memberId); if(!m) return; wonTarget=memberId; wonCompanion=false;
+  const subEl=document.getElementById('won-sub'); if(subEl) subEl.textContent='当選おめでとう！ドロップした店舗を選んでください';
   document.getElementById('won-name').textContent=`${m.name||m.line_name} さん`;
   document.getElementById('won-date-input').value=curWeekWednesday();
   document.getElementById('won-visit-date').value=''; document.getElementById('won-shop-input').value='';
@@ -576,15 +649,18 @@ function confirmWon(){
   const key=ensureWk(wonTarget);
   const di=(document.getElementById('won-date-input').value||'').replace(/[^0-9]/g,''); const wonDate=di.length===8?di:today();
   WEEKLY[key].won_date=wonDate; WEEKLY[key].won_shop=shop;
+  const isComp=wonCompanion; // 制限中の当選＝同行補助モード（ステータスは上げない）
   const winCount=(m.won1?1:0)+(m.won2?1:0)+(m.won3?1:0)+1;
-  if(!m.won1){ m.won1=wonDate; m.status='1回当選済'; } else if(!m.won2){ m.won2=wonDate; m.status='2回当選済'; } else if(!m.won3){ m.won3=wonDate; m.status='3回当選済'; }
+  if(!isComp){
+    if(!m.won1){ m.won1=wonDate; m.status='1回当選済'; } else if(!m.won2){ m.won2=wonDate; m.status='2回当選済'; } else if(!m.won3){ m.won3=wonDate; m.status='3回当選済'; }
+  }
   m.last_active=wonDate;
   const vd=(document.getElementById('won-visit-date').value||'').replace(/[^0-9]/g,'');
-  WIN_HISTORY.push({member_id:wonTarget,line_name:m.line_name,name:m.name,won_date:wonDate,shop,win_num:winCount,month:curMonth,week:curWeek,is_companion_mode:false,visit_date:vd||null});
+  WIN_HISTORY.push({member_id:wonTarget,line_name:m.line_name,name:m.name,won_date:wonDate,shop,win_num:winCount,month:curMonth,week:curWeek,is_companion_mode:isComp,visit_date:vd||null});
   closeModal('modal-won');
-  toast(`🏆 ${m.name||m.line_name} さんの当選を登録しました！`);
+  toast(isComp?`📩 ${m.name||m.line_name} さんの当選連絡を記録しました（同行補助）`:`🏆 ${m.name||m.line_name} さんの当選を登録しました！`);
   const stock=getStock(m.id); if(stock>0) setTimeout(()=>toast(`💰 ストック残 ¥${stock.toLocaleString()} — ゴールド管理から受け渡し登録を`),2400);
-  wonTarget=null; afterEdit();
+  wonCompanion=false; wonTarget=null; afterEdit();
 }
 function clearWon(memberId){
   if(!confirm('当選登録を取り消しますか？')) return;
@@ -595,6 +671,53 @@ function clearWon(memberId){
   const m=MEMBERS.find(x=>x.id===memberId);
   if(m){ if(m.won2){ m.won2=null; m.status='1回当選済'; } else if(m.won1){ m.won1=null; m.status='未当選'; } }
   toast('当選登録を取り消しました'); afterEdit();
+}
+// 制限中メンバー：落選連絡（restricted_result はトグル文字列 'ok'）
+function setRestrictedResult(memberId,val){
+  const key=ensureWk(memberId);
+  WEEKLY[key].restricted_result = WEEKLY[key].restricted_result===val ? '' : val;
+  if(WEEKLY[key].restricted_result==='ok'){ const m=MEMBERS.find(x=>x.id===memberId); if(m) m.last_active=curWeekWednesday(); toast('落選を記録しました'); }
+  afterEdit();
+}
+// 制限中メンバー：当選連絡＝同行補助モードで当選登録モーダルを開く
+function openWonModalRestricted(memberId){
+  openWonModal(memberId); wonCompanion=true;
+  const m=MEMBERS.find(x=>x.id===memberId);
+  if(m) document.getElementById('won-name').textContent=`${m.name||m.line_name} さん（制限中）`;
+  const subEl=document.getElementById('won-sub'); if(subEl) subEl.textContent='制限中ですが当選連絡がありました。同行補助として記録します。';
+}
+// 当選日の修正（討伐の間/週次から。指定週の当選エントリを更新）
+function openEditWonDate(memberId,mo,wk){
+  mo=mo||curMonth; wk=wk||curWeek;
+  const w=WEEKLY[getWkKey(mo,wk,memberId)];
+  if(!w||!w.won_date){ toast('この週の当選データが見つかりません'); return; }
+  document.getElementById('ewd-member-id').value=memberId;
+  document.getElementById('ewd-month').value=mo;
+  document.getElementById('ewd-week').value=wk;
+  document.getElementById('ewd-date').value=String(w.won_date).replace(/[^0-9]/g,'');
+  document.getElementById('ewd-shop').value=w.won_shop||'';
+  document.getElementById('modal-edit-won-date').classList.add('show');
+}
+function saveEditWonDate(){
+  const memberId=parseInt(document.getElementById('ewd-member-id').value);
+  const mo=parseInt(document.getElementById('ewd-month').value)||curMonth;
+  const wk=parseInt(document.getElementById('ewd-week').value)||curWeek;
+  const newDate=(document.getElementById('ewd-date').value||'').replace(/[^0-9]/g,'');
+  const newShop=document.getElementById('ewd-shop').value.trim();
+  if(newDate.length!==8){ toast('⚠ 日付は8桁（YYYYMMDD）で入力してください'); return; }
+  const key=getWkKey(mo,wk,memberId); const m=MEMBERS.find(x=>x.id===memberId);
+  if(!WEEKLY[key]) return;
+  WEEKLY[key].won_date=newDate; if(newShop) WEEKLY[key].won_shop=newShop;
+  const we=WIN_HISTORY.find(w=>w.member_id===memberId&&w.month===mo&&w.week===wk);
+  if(we){ we.won_date=newDate; if(newShop) we.shop=newShop; }
+  if(m){
+    const allWins=WIN_HISTORY.filter(w=>w.member_id===memberId&&!w.is_companion_mode).sort((a,b)=>String(a.won_date).localeCompare(String(b.won_date)));
+    m.won1=allWins[0]?allWins[0].won_date:null; m.won2=allWins[1]?allWins[1].won_date:null; m.won3=allWins[2]?allWins[2].won_date:null;
+    m.last_active=newDate;
+  }
+  closeModal('modal-edit-won-date'); toast(`✓ 当選日を ${fmtDate(newDate)} に修正しました`); saveQuest();
+  if(document.getElementById('s-hall').classList.contains('on')) renderHall();
+  else if(document.getElementById('s-weekly').classList.contains('on')) renderWeekly();
 }
 
 // ===== メンバー 追加 / 編集 / 削除 =====
@@ -662,6 +785,158 @@ function confirmDeleteMember(){
   }
   closeModal('modal-edit-member'); toast(`${m.name||m.line_name} を削除しました`); afterMemberEdit();
 }
+
+// ===== 報酬の支払い登録（ストック払い出し）=====
+function openPaymentModal(memberId){
+  const m=MEMBERS.find(x=>x.id===memberId); if(!m) return;
+  const stock=getStock(memberId);
+  document.getElementById('pay-member-id').value=memberId;
+  document.getElementById('pay-member-info').innerHTML=`<div style="font-weight:700;color:var(--text);margin-bottom:4px">${esc(m.name||m.line_name)} <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">${esc(m.line_name)}</span></div><div>累積 ¥${getAccruedReward(memberId).toLocaleString()} − 支払済 ¥${getPaidTotal(memberId).toLocaleString()} = <span style="color:var(--gold2);font-weight:700">ストック残 ¥${stock.toLocaleString()}</span></div>`;
+  document.getElementById('pay-amount').value=stock>0?stock:0;
+  document.getElementById('pay-date').value=today();
+  document.getElementById('pay-note').value='';
+  document.getElementById('modal-payment').classList.add('show');
+}
+function savePayment(){
+  const memberId=parseInt(document.getElementById('pay-member-id').value);
+  const m=MEMBERS.find(x=>x.id===memberId); if(!m) return;
+  const amount=parseInt(document.getElementById('pay-amount').value);
+  if(isNaN(amount)||amount<=0){ toast('⚠ 支払金額を入力してください'); return; }
+  const stock=getStock(memberId);
+  if(amount>stock && !confirm(`ストック残（¥${stock.toLocaleString()}）を超える金額です。このまま登録しますか？`)) return;
+  const paidDate=(document.getElementById('pay-date').value||'').replace(/[^0-9]/g,'')||today();
+  const note=document.getElementById('pay-note').value.trim();
+  const newId=Math.max(0,...PAYMENTS.map(p=>p.id||0))+1;
+  PAYMENTS.push({id:newId,member_id:memberId,amount,paid_date:paidDate,note});
+  closeModal('modal-payment');
+  toast(`💴 ${m.name||m.line_name} さんへ ¥${amount.toLocaleString()} を登録しました`);
+  saveQuest(); renderGold();
+}
+function deletePayment(id){
+  const p=PAYMENTS.find(x=>x.id===id); if(!p) return;
+  const m=MEMBERS.find(x=>x.id===p.member_id);
+  if(!confirm(`${m?(m.name||m.line_name):'このメンバー'} への支払い ¥${(parseInt(p.amount)||0).toLocaleString()}（${fmtDate(p.paid_date)}）を取り消しますか？\nストック残に戻ります。`)) return;
+  const idx=PAYMENTS.findIndex(x=>x.id===id); if(idx>=0) PAYMENTS.splice(idx,1);
+  if(liveData && supabaseClient) supabaseClient.from('lq_reward_payments').delete().eq('id',id).then(()=>{});
+  toast('支払いを取り消しました（ストックに戻りました）');
+  saveQuest(); renderGold();
+}
+function renderPaymentHistory(){
+  const tbody=document.getElementById('payment-history-body'); if(!tbody) return;
+  if(!PAYMENTS.length){ tbody.innerHTML='<tr><td><div class="empty" style="padding:20px"><div class="big">💴</div>まだ支払い記録がありません</div></td></tr>'; return; }
+  const sorted=[...PAYMENTS].sort((a,b)=>String(b.paid_date).localeCompare(String(a.paid_date)));
+  tbody.innerHTML=sorted.map(p=>{ const m=MEMBERS.find(x=>x.id===p.member_id);
+    return `<tr>
+      <td data-label="支払日" style="color:var(--text2);font-size:12px">${fmtDate(p.paid_date)}</td>
+      <td data-label="冒険者"><b>${m?esc(m.line_name):'—'}</b><div style="font-size:11px;color:var(--text3)">${m?esc(m.name||'—'):'(削除済)'}</div></td>
+      <td data-label="金額" class="g" style="color:var(--rolex3)">¥${(parseInt(p.amount)||0).toLocaleString()}</td>
+      <td data-label="備考" style="color:var(--text3);font-size:12px">${esc(p.note||'')}</td>
+      <td data-label="操作"><button class="btn-mini" onclick="deletePayment(${p.id})">取消</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== CSV出力 =====
+function exportRewardCSV(){
+  const rows=[['LINE名','氏名','ステータス','累積報酬','支払済','ストック残']];
+  MEMBERS.forEach(m=>{ const a=getAccruedReward(m.id),pd=getPaidTotal(m.id); if(a===0&&pd===0) return; rows.push([m.line_name,m.name||'',m.status||'',a,pd,getStock(m.id)]); });
+  dlCSV(rows,'loreque_reward.csv'); toast('📥 報酬CSVを出力しました');
+}
+function exportMemberCSV(){
+  const rows=[['LINE名','氏名','ステータス','稼働','制限','累積報酬','支払済','ストック残','最終活動日','備考']];
+  MEMBERS.forEach(m=>rows.push([m.line_name,m.name||'',m.status||'',isActiveM(m)?'アクティブ':'非アクティブ',isRestricted(m)?'制限中':'',getAccruedReward(m.id),getPaidTotal(m.id),getStock(m.id),m.last_active?String(m.last_active).replace(/[^0-9]/g,''):'',m.note||'']));
+  dlCSV(rows,'loreque_members.csv'); toast('📥 メンバーCSVを出力しました');
+}
+
+// ===== 月の追加 =====
+function addMonthQuest(){
+  const next=Math.max(...availableMonths)+1;
+  if(next>12){ toast('⚠ 12月以降は追加できません'); return; }
+  if(!availableMonths.includes(next)){ availableMonths.push(next); availableMonths.sort((a,b)=>a-b); }
+  curMonth=next; saveQuest(); renderWeekly(); toast(`✓ ${next}月を追加しました`);
+}
+// ===== 購入管理・店舗買付 =====
+function renderPurchase(){
+  const restricted=MEMBERS.filter(m=>isRestricted(m));
+  const restHtml=restricted.length?restricted.map(m=>{const days=getRestrictionDaysLeft(m.id),rel=fmtDate(getRestrictionReleaseDate(m.id));
+    return `<div style="background:rgba(176,125,18,.08);border:1px solid rgba(176,125,18,.25);border-radius:9px;padding:9px 12px;font-size:12px"><div style="font-weight:600;color:var(--gold2)">${esc(m.name||m.line_name)}</div><div style="color:var(--text3);font-size:11px">${esc(m.line_name)}</div><div style="color:var(--amber);margin-top:3px">解除 ${rel}（残${days}日）</div></div>`;}).join(''):'<span style="color:var(--text3);font-size:13px">現在、制限中のメンバーはいません</span>';
+  const pending=WIN_HISTORY.map((w,i)=>({...w,_idx:i})).filter(w=>!PURCHASE[w._idx]);
+  const pendHtml=pending.length?`<table><thead><tr><th>冒険者</th><th>当選日</th><th>店舗</th><th>操作</th></tr></thead><tbody>`+pending.map(w=>{const m=MEMBERS.find(x=>x.id===w.member_id),r=m&&isRestricted(m);
+    return `<tr><td data-label="冒険者"><b>${esc(w.line_name)}</b><div style="font-size:11px;color:var(--text3)">${esc(w.name||'—')}</div></td><td data-label="当選日">${fmtDate(w.won_date)}・第${w.week||'?'}週</td><td data-label="店舗">${esc(w.shop||'—')}${r?' <span class="badge b-ail">制限中→同行</span>':''}</td><td data-label="操作"><button class="btn-mini" onclick="openPurchaseModal(${w._idx})">買付結果を登録</button></td></tr>`;}).join('')+`</tbody></table>`:'<div class="empty" style="padding:24px"><div class="big">✓</div>未処理の当選はありません</div>';
+  const recs=WIN_HISTORY.map((w,i)=>({...w,_idx:i,_p:PURCHASE[i]})).filter(e=>e._p);
+  const recHtml=recs.length?`<table><thead><tr><th>冒険者</th><th>結果</th><th>買付日</th><th>台数</th><th>同行</th><th>操作</th></tr></thead><tbody>`+recs.map(e=>{const p=e._p,rl=p.result==='success'?'<span class="badge b-done">✓成功</span>':p.result==='fail'?'<span class="badge" style="background:rgba(192,57,43,.12);color:var(--red2)">✗失敗</span>':'<span class="badge b-gray">—中止</span>';
+    return `<tr><td data-label="冒険者"><b>${esc(e.line_name)}</b></td><td data-label="結果">${rl}</td><td data-label="買付日">${fmtDate(p.purchase_date)}</td><td data-label="台数" class="mono">${p.units||'—'}</td><td data-label="同行" style="font-size:11px;color:var(--text3)">${esc(p.companion||'—')}</td><td data-label="操作"><button class="btn-mini" onclick="openPurchaseModal(${e._idx})">編集</button></td></tr>`;}).join('')+`</tbody></table>`:'<div class="empty" style="padding:20px"><div class="big">📦</div>まだ買付記録がありません</div>';
+  const storeHtml=STORE_PURCHASES.length?`<table><thead><tr><th>LINE名</th><th>買付日</th><th>店舗</th><th>結果</th><th>台数</th><th>操作</th></tr></thead><tbody>`+STORE_PURCHASES.map((p,i)=>{const rl=p.result==='success'?'<span class="badge b-done">✓成功</span>':p.result==='fail'?'<span class="badge" style="background:rgba(192,57,43,.12);color:var(--red2)">✗失敗</span>':'<span class="badge b-gray">—中止</span>';
+    return `<tr><td data-label="LINE名"><b>${esc(p.line_name)}</b><div style="font-size:11px;color:var(--text3)">${esc(p.name||'—')}</div></td><td data-label="買付日">${fmtDate(p.purchase_date)}</td><td data-label="店舗">${esc(p.shop||'—')}</td><td data-label="結果">${rl}</td><td data-label="台数" class="mono">${p.units||'—'}</td><td data-label="操作"><button class="btn-mini" onclick="deleteStorePurchase(${i})">削除</button></td></tr>`;}).join('')+`</tbody></table>`:'<div class="empty" style="padding:20px"><div class="big">🏬</div>店舗買付の記録はありません</div>';
+  document.getElementById('s-purchase').innerHTML =
+    bannerHtml()
+    + ph('📦 購入<span class="em">管理</span>','買付結果の登録と購入制限（買付成功＝6ヶ月制限）の管理',`<button class="btn btn-gold" onclick="openStorePurchaseModal()">＋ 店舗買付を登録</button>`)
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">⏳ 購入制限中</span></span><span class="r">${restricted.length}名</span></div><div style="display:flex;flex-wrap:wrap;gap:8px">${restHtml}</div></div></div>`
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">🎯 未処理の当選（買付結果待ち）</span></span><span class="r">${pending.length}件</span></div>${pendHtml}</div></div>`
+    + `<div class="dq" style="margin-bottom:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">📦 買付記録</span></span><span class="r">${recs.length}件</span></div>${recHtml}</div></div>`
+    + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">🏬 店舗買付（抽選外）</span></span><span class="r">${STORE_PURCHASES.length}件</span></div>${storeHtml}</div></div>`;
+}
+function openPurchaseModal(idx){
+  const w=WIN_HISTORY[idx]; if(!w) return;
+  const m=MEMBERS.find(x=>x.id===w.member_id), restricted=m&&isRestricted(m), p=PURCHASE[idx]||{};
+  document.getElementById('pur-idx').value=idx;
+  document.getElementById('pur-info').innerHTML=`${esc(w.name||w.line_name)} ／ 当選 ${fmtDate(w.won_date)} ${w.shop?'📍'+esc(w.shop):''}`;
+  document.getElementById('pur-result').value=p.result||'success';
+  document.getElementById('pur-date').value=p.purchase_date?String(p.purchase_date).replace(/[^0-9]/g,''):curWeekWednesday();
+  document.getElementById('pur-units').value=p.units||'1';
+  document.getElementById('pur-comp').value=p.companion||'';
+  document.getElementById('pur-comp-result').value=p.companion_result||'';
+  document.getElementById('pur-comp-units').value=p.companion_units||'0';
+  document.getElementById('pur-note').value=p.note||'';
+  document.getElementById('pur-rmemo-wrap').style.display=restricted?'block':'none';
+  document.getElementById('pur-rmemo').value=p.restriction_memo||'';
+  purToggleSuccess();
+  document.getElementById('modal-purchase').classList.add('show');
+}
+function purToggleSuccess(){ document.getElementById('pur-success').style.display=document.getElementById('pur-result').value==='success'?'block':'none'; }
+function savePurchase(){
+  const idx=parseInt(document.getElementById('pur-idx').value);
+  const result=document.getElementById('pur-result').value;
+  const purchase_date=(document.getElementById('pur-date').value||'').replace(/[^0-9]/g,'')||today();
+  const units=result==='success'?(document.getElementById('pur-units').value||1):0;
+  const companion=document.getElementById('pur-comp').value.trim();
+  const companion_result=document.getElementById('pur-comp-result').value;
+  const companion_units=document.getElementById('pur-comp-units').value||0;
+  const note=document.getElementById('pur-note').value.trim();
+  const restriction_memo=document.getElementById('pur-rmemo').value.trim();
+  PURCHASE[idx]={result,purchase_date,units,companion,companion_result,companion_units,note,restriction_memo};
+  if(result==='success'){ const win=WIN_HISTORY[idx]; if(win){ const m=MEMBERS.find(x=>x.id===win.member_id); if(m){ const pd=purchase_date||today(); if(!m.store_purchase_date||pd>String(m.store_purchase_date).replace(/[^0-9]/g,'')) m.store_purchase_date=pd; } } }
+  closeModal('modal-purchase'); toast(result==='success'?'✓ 買付成功を登録（購入制限を開始）':'買付結果を登録しました'); saveQuest(); renderPurchase();
+}
+function openStorePurchaseModal(){
+  ['sp-member-name','sp-purchase-date','sp-companion','sp-note','sp-shop-input'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('sp-result').value='success'; document.getElementById('sp-units').value='1';
+  document.getElementById('sp-member-list').innerHTML=MEMBERS.map(m=>`<option value="${esc(m.line_name)}">${esc(m.name||'')}</option>`).join('');
+  document.getElementById('sp-shop-grid').innerHTML=SHOPS.map(s=>`<button class="shop-btn" onclick="spSelectShop(this,'${esc(s)}')">${esc(s)}</button>`).join('');
+  document.getElementById('modal-store-purchase').classList.add('show');
+}
+function spSelectShop(btn,shop){ document.querySelectorAll('#sp-shop-grid .shop-btn').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); document.getElementById('sp-shop-input').value=shop; }
+function saveStorePurchase(){
+  const lineName=document.getElementById('sp-member-name').value.trim();
+  if(!lineName){ toast('⚠ LINE名/氏名は必須です'); return; }
+  const m=MEMBERS.find(x=>x.line_name===lineName||(x.name||'')===lineName);
+  const purchaseDate=(document.getElementById('sp-purchase-date').value||'').replace(/[^0-9]/g,'');
+  if(!purchaseDate){ toast('⚠ 買付日は必須です'); return; }
+  const shop=document.getElementById('sp-shop-input').value.trim();
+  const result=document.getElementById('sp-result').value, units=document.getElementById('sp-units').value;
+  const companion=document.getElementById('sp-companion').value.trim(), note=document.getElementById('sp-note').value.trim();
+  STORE_PURCHASES.unshift({ id:Date.now(), member_id:m?m.id:null, line_name:lineName, name:m?(m.name||''):'', purchase_date:purchaseDate, shop, result, units, companion, note });
+  if(result==='success'&&m){ const ex=m.store_purchase_date?String(m.store_purchase_date).replace(/[^0-9]/g,''):''; if(!ex||purchaseDate>ex) m.store_purchase_date=purchaseDate; toast(`✓ ${m.name||lineName} の店舗買付成功を登録（制限開始）`); }
+  else toast('✓ 店舗買付記録を保存しました');
+  closeModal('modal-store-purchase'); saveQuest(); renderPurchase();
+}
+function deleteStorePurchase(idx){
+  const p=STORE_PURCHASES[idx]; if(!p) return;
+  if(!confirm(`${p.name||p.line_name}（${fmtDate(p.purchase_date)}）の記録を削除しますか？`)) return;
+  STORE_PURCHASES.splice(idx,1);
+  if(liveData && supabaseClient) supabaseClient.from('lq_store_purchases').delete().eq('id',p.id).then(()=>{});
+  toast('店舗買付記録を削除しました'); saveQuest(); renderPurchase();
+}
 // Supabase 全保存（本番 index.html と同一ロジック）。成否を true/false で返す。
 async function saveToSupabase(){
   if(!supabaseClient) return false;
@@ -684,7 +959,7 @@ async function saveToSupabase(){
 // ================================================================
 // 画面切替
 // ================================================================
-const RENDER={home:renderHome, weekly:renderWeekly, party:renderParty, gold:renderGold, hall:renderHall, segment:renderSegment, backup:renderBackup};
+const RENDER={home:renderHome, weekly:renderWeekly, party:renderParty, gold:renderGold, hall:renderHall, segment:renderSegment, purchase:renderPurchase, backup:renderBackup};
 function go(s){
   document.querySelectorAll('.nav-item,.mnav-item').forEach(n=>n.classList.toggle('active', n.dataset.s===s));
   document.querySelectorAll('.screen').forEach(el=>el.classList.toggle('on', el.id===('s-'+s)));
@@ -798,7 +1073,7 @@ function weeklyPass(m){ if(weeklyFilter==='all') return true; const c=weeklyCat(
   if(weeklyFilter==='sswait') return c==='sswait'; if(weeklyFilter==='part') return c==='part'||c==='ssna'; return c===weeklyFilter; }
 const WEEKLY_DEFS=[['all','全員'],['reward','✦報酬対象'],['sswait','戦果報告待ち'],['won','👑討伐'],['part','出撃中(未達)'],['none','未出撃']];
 function renderWeekly(){
-  const monthPills=availableMonths.map(mo=>`<button class="pill ${mo===curMonth?'on':''}" onclick="setMonth(${mo})">${mo}月</button>`).join('');
+  const monthPills=availableMonths.map(mo=>`<button class="pill ${mo===curMonth?'on':''}" onclick="setMonth(${mo})">${mo}月</button>`).join('')+`<button class="pill" onclick="addMonthQuest()" style="border-style:dashed">＋月</button>`;
   const weekPills=[1,2,3,4,5].map(wk=>`<button class="pill ${wk===curWeek?'on':''}" onclick="setWeek(${wk})">第${wk}週</button>`).join('');
   const normal=MEMBERS.filter(m=>!isRestricted(m));
   const cnt=key=>key==='all'?normal.length:normal.filter(m=>{const c=weeklyCat(m); return key==='sswait'?(c==='sswait'):key==='part'?(c==='part'||c==='ssna'):c===key;}).length;
@@ -824,9 +1099,18 @@ function renderWeeklyBody(){
   const c=document.getElementById('weekly-count'); if(c) c.textContent=list.length+'名表示';
   const restricted=MEMBERS.filter(m=>isRestricted(m)&&matchQ(m,weeklyQ));
   document.getElementById('weekly-rest').innerHTML = restricted.length
-    ? `<div class="dq" style="margin-top:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">🛡 状態異常（購入制限中）</span></span><span class="r">${restricted.length}名</span></div>`
-      + restricted.map(m=>{ const days=getRestrictionDaysLeft(m.id),rel=fmtDate(getRestrictionReleaseDate(m.id));
-          return `<div class="q-row" style="grid-template-columns:1.5fr auto"><div class="q-name c-name"><b>${esc(m.line_name||'')}</b><span>${esc(m.name||'—')}</span></div><span class="badge b-ail c-badge">🛡 クールタイム 残${days}日（〜${rel}）</span></div>`; }).join('')
+    ? `<div class="dq" style="margin-top:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">🛡 状態異常（購入制限中）</span></span><span class="r">${restricted.length}名・申込/落選/当選連絡を記録できます</span></div>`
+      + restricted.map(m=>{ const w=getWk(curMonth,curWeek,m.id),days=getRestrictionDaysLeft(m.id),rel=fmtDate(getRestrictionReleaseDate(m.id));
+          const apply=w.apply,isWon=!!w.won_date,rResult=w.restricted_result||'';
+          return `<div class="q-row edit">
+            <div class="q-name c-name"><b>${esc(m.line_name||'')}</b><span>${esc(m.name||'—')}</span><span class="badge b-ail" style="margin-top:4px">🛡 残${days}日（〜${rel}）</span></div>
+            <div class="c-apply"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--text3)">申込</span><div class="stepper"><button onclick="stepApply(${m.id},-1)">−</button><input type="number" min="0" max="6" value="${apply!=null?apply:''}" onchange="setApply(${m.id},this.value)"><button onclick="stepApply(${m.id},1)">＋</button></div></div></div>
+            <div class="c-won" style="display:flex;gap:6px;align-items:center">
+              ${isWon
+                ? `<span class="won-tag">📩 ${esc(w.won_shop||'当選')} <span class="x" onclick="clearWon(${m.id})">×</span></span>`
+                : `<div class="rtoggle"><button class="rbtn ng ${rResult==='ok'?'on':''}" onclick="setRestrictedResult(${m.id},'ok')">落選</button></div><button class="won-btn" onclick="openWonModalRestricted(${m.id})">当選 📩</button>`}
+            </div>
+          </div>`; }).join('')
       + `</div></div>` : '';
 }
 function onWeeklySearch(v){ weeklyQ=v; renderWeeklyBody(); }
@@ -839,7 +1123,7 @@ function renderParty(){
   const filters=PARTY_DEFS.map(([k,l])=>`<button class="pill ${partyFilter===k?'on':''}" onclick="setPartyFilter('${k}')">${l}<span class="n">${MEMBERS.filter(m=>partyMatch(m,k)).length}</span></button>`).join('');
   document.getElementById('s-party').innerHTML =
     bannerHtml()
-    + ph('👥 パーティー<span class="em">一覧</span>', `全${MEMBERS.length}名　／　⚡アクティブ ${MEMBERS.filter(isActiveM).length}名・🛡制限中 ${MEMBERS.filter(m=>isRestricted(m)).length}名`, `<button class="btn btn-gold" onclick="openAddMember()">＋ メンバー追加</button>`)
+    + ph('👥 パーティー<span class="em">一覧</span>', `全${MEMBERS.length}名　／　⚡アクティブ ${MEMBERS.filter(isActiveM).length}名・🛡制限中 ${MEMBERS.filter(m=>isRestricted(m)).length}名`, `<button class="btn-mini" onclick="exportMemberCSV()" style="margin-right:8px">📥 CSV</button><button class="btn btn-gold" onclick="openAddMember()">＋ メンバー追加</button>`)
     + `<input id="party-q" class="qsearch" value="${esc(partyQ)}" oninput="onPartySearch(this.value)" placeholder="🔍 LINE名・氏名で検索（300名から絞り込み）">`
     + `<div class="filters">${filters}</div>`
     + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">冒険者リスト</span></span><span class="r" id="party-count"></span></div>`
@@ -874,7 +1158,7 @@ function renderGold(){
     const w=getWk(curMonth,curWeek,m.id); if(w.result_ss&&!w.won_date&&w.apply!=null&&w.apply>=venue) weekCount++; });
   document.getElementById('s-gold').innerHTML =
     bannerHtml()
-    + ph('💰 ゴールド<span class="em">管理</span>', '報酬は当選時にまとめて受け渡し（1週 ＝ 出撃5/5 ＋ 戦果報告 で 1,000G）')
+    + ph('💰 ゴールド<span class="em">管理</span>', '報酬は当選時にまとめて受け渡し（1週 ＝ 出撃5/5 ＋ 戦果報告 で 1,000G）', `<button class="btn-mini" onclick="exportRewardCSV()">📥 報酬CSV</button>`)
     + `<div class="grid3">
         ${statCard('未払いゴールド合計', totalStock.toLocaleString(),'G','受け渡し待ち','gold')}
         ${statCard('受け渡し済み累計', totalPaid.toLocaleString(),'G',`${PAYMENTS.length}件`,'green')}
@@ -882,9 +1166,10 @@ function renderGold(){
       </div>
       <input id="gold-q" class="qsearch" value="${esc(goldQ)}" oninput="onGoldSearch(this.value)" placeholder="🔍 LINE名・氏名で検索">
       <div class="dq"><div class="dq-inner"><table>
-        <thead><tr><th>冒険者</th><th>今週</th><th>累積G</th><th>受渡済</th><th>ストック残</th></tr></thead>
-        <tbody id="gold-body"></tbody></table></div></div>`;
-  renderGoldBody();
+        <thead><tr><th>冒険者</th><th>今週</th><th>累積G</th><th>受渡済</th><th>ストック残</th><th>操作</th></tr></thead>
+        <tbody id="gold-body"></tbody></table></div></div>
+      <div class="dq" style="margin-top:14px"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">💴 支払い履歴</span></span><span class="r">${PAYMENTS.length}件</span></div><table><thead><tr><th>支払日</th><th>冒険者</th><th>金額</th><th>備考</th><th>操作</th></tr></thead><tbody id="payment-history-body"></tbody></table></div></div>`;
+  renderGoldBody(); renderPaymentHistory();
 }
 function renderGoldBody(){
   const venue=STD_VENUE;
@@ -898,6 +1183,7 @@ function renderGoldBody(){
       <td data-label="累積G" class="mono" style="color:var(--text2)">${m._acc.toLocaleString()}G</td>
       <td data-label="受渡済" class="mono" style="color:var(--rolex3)">${m._paid>0?m._paid.toLocaleString()+'G':'—'}</td>
       <td data-label="ストック残" class="g" style="font-weight:700">${m._stock>0?m._stock.toLocaleString()+'G':'—'}</td>
+      <td data-label="操作">${m._stock>0?`<button class="btn-mini" onclick="openPaymentModal(${m.id})">💴 支払い登録</button>`:'—'}</td>
     </tr>`; }).join(''):`<tr><td><div class="empty"><div class="big">💰</div>該当する記録がありません</div></td></tr>`;
   document.getElementById('gold-body').innerHTML=body;
 }
@@ -917,7 +1203,7 @@ function renderHall(){
     + `<div class="filters">${tabHtml}</div>`
     + `<input id="hall-q" class="qsearch" value="${esc(hallQ)}" oninput="onHallSearch(this.value)" placeholder="🔍 当選者名で検索">`
     + `<div class="dq"><div class="dq-inner"><table>
-        <thead><tr><th>討伐日</th><th>冒険者</th><th>ドロップ（店舗）</th><th>回数/月</th><th>ストック残</th></tr></thead>
+        <thead><tr><th>討伐日</th><th>冒険者</th><th>ドロップ（店舗）</th><th>回数/月</th><th>ストック残</th><th>操作</th></tr></thead>
         <tbody id="hall-body"></tbody></table></div></div>`;
   renderHallBody();
 }
@@ -935,6 +1221,7 @@ function renderHallBody(){
       <td data-label="ドロップ"><span class="badge b-drop">👑 ${esc(w.shop||'討伐')}</span></td>
       <td data-label="討伐回数" class="mono" style="color:var(--text2)">${w.win_num?w.win_num+'回目':(w.month?`${w.month}月`:'—')}</td>
       <td data-label="ストック残" class="g">${stock>0?stock.toLocaleString()+'G':'—'}</td>
+      <td data-label="操作"><button class="btn-mini" onclick="openEditWonDate(${w.member_id},${w.month||0},${w.week||0})">✎ 日付</button></td>
     </tr>`; }).join(''):`<tr><td><div class="empty"><div class="big">🗡</div>${hallFilter==='thisweek'?'今週はまだ討伐者がいません':(hallQ?'該当する当選者がいません':'この期間の討伐記録はありません')}</div></td></tr>`;
   document.getElementById('hall-body').innerHTML=body;
 }
@@ -1084,8 +1371,8 @@ function renderBackup(){
         <div style="font-size:13px;color:var(--text2);margin-bottom:13px">JSONの中身をこの画面に表示するだけ（Supabaseには書き込みません）。復元する前に中身を見たい時に。</div>
         <label class="btn btn-ghost" style="cursor:pointer">👁 表示だけ確認する<input type="file" accept="application/json,.json" onchange="restoreFromBackup(this)" style="display:none"></label>
       </div></div>`
-    + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">ℹ バックアップについて</span></span></div>
-        <div style="font-size:12px;color:var(--text3);line-height:1.9">・本番データは Supabase に保存されています。<br>・本番ツール（メインのロレクエ）にも自動バックアップ機能があります。<br>・月末・大量更新の前などの節目に、このボタンで JSON を手元保存しておくのがおすすめです。</div></div></div>`;
+    + `<div class="dq"><div class="dq-inner"><div class="dq-head"><span class="t"><span class="pix">ℹ 自動退避・バックアップについて</span></span></div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.9">・本番データは Supabase に保存されています（ログインで自動読込）。<br>・入力のたび＆30分ごとに、この端末のブラウザへ静かに自動退避しています（保険）。<br>　🕒 最終自動退避: <b style="color:var(--text2)">${lastSnapshotTime()?new Date(lastSnapshotTime()).toLocaleString('ja-JP'):'—'}</b><br>・月末や大量更新の前は、上の「📥 保存」で手元にJSONを残すのがおすすめです。</div></div></div>`;
 }
 function exportBackup(){
   const data={MEMBERS,WEEKLY,WIN_HISTORY,PURCHASE,STORE_PURCHASES,PAYMENTS,curMonth,curWeek,availableMonths,savedAt:new Date().toISOString(),source:'loreque-quest'};
@@ -1241,6 +1528,7 @@ async function init(){
   if(ok) liveData=true; // 認証済み＆実データ読込成功時のみ、入力をSupabaseへ保存
   toast(ok?'☁ Supabaseから実データを読み込みました（入力は自動保存されます）':'データ読み込みに失敗（権限/通信を確認）');
   hallFilter='thisweek'; go('home');
+  if(liveData){ localSnapshot(); setInterval(()=>{ if(liveData) localSnapshot(); }, 1800000); } // 30分ごと静かにローカル退避
 }
 init();
 </script>
