@@ -574,6 +574,21 @@ function winnersOfWeek(mo,wk){
   MEMBERS.forEach(m=>{ const w=getWk(mo,wk,m.id); if(w.won_date){ out.push({member_id:m.id,line_name:m.line_name,name:m.name,won_date:w.won_date,shop:w.won_shop,month:mo,week:wk}); }});
   return out;
 }
+// 当選履歴(WIN_HISTORY)を週次データ(WEEKLYのwon_date)から補完。週次を真実として、抜けた当選を復元する。
+function reconcileWinHistory(){
+  let added=0;
+  Object.keys(WEEKLY).forEach(key=>{
+    const w=WEEKLY[key]; if(!w||!w.won_date) return;
+    const p=key.split('-'); if(p.length<3) return;
+    const mo=parseInt(p[0]),wk=parseInt(p[1]),mid=parseInt(p[2]);
+    if(WIN_HISTORY.some(x=>x.member_id===mid&&x.month===mo&&x.week===wk)) return;
+    const m=MEMBERS.find(x=>x.id===mid);
+    WIN_HISTORY.push({member_id:mid,line_name:m?m.line_name:'',name:m?(m.name||''):'',won_date:w.won_date,shop:w.won_shop||'',win_num:null,month:mo,week:wk,is_companion_mode:false,visit_date:null});
+    added++;
+  });
+  // 並べ替えはしない（PURCHASEが配列インデックスをキーにしているため。末尾に追加して既存の対応を保持。表示順は描画時にソート）
+  return added;
+}
 function isActiveM(m){ return calcPriority(m)==='1:アクティブ'; }
 // 名前検索（LINE名 or 氏名の部分一致・大文字小文字無視）。300名から絞り込む用。
 function matchQ(m,q){ q=(q||'').toLowerCase().trim(); if(!q) return true; return (m.line_name||'').toLowerCase().includes(q)||(m.name||'').toLowerCase().includes(q); }
@@ -946,6 +961,7 @@ function deleteStorePurchase(idx){
 async function saveToSupabase(){
   if(!supabaseClient) return false;
   try{
+    reconcileWinHistory(); // 保存前に当選履歴を週次データから補完（切り詰めで当選が消えるのを防止）
     if(MEMBERS.length>0){ const {error}=await supabaseClient.from('lq_members').upsert(MEMBERS,{onConflict:'id'}); if(error) throw error; }
     const weeklyRows=Object.entries(WEEKLY).map(([k,v])=>{ const p=k.split('-'); return {month:parseInt(p[0]),week:parseInt(p[1]),member_id:parseInt(p[2]),...v}; });
     if(weeklyRows.length>0){ const {error}=await supabaseClient.from('lq_weekly_inputs').upsert(weeklyRows,{onConflict:'month,week,member_id'}); if(error) throw error; }
@@ -1229,7 +1245,7 @@ function renderHall(){
   const tabHtml=tabs.map(([k,l])=>`<button class="pill ${hallFilter===k?'on':''}" onclick="setHallFilter('${k}')">${l}<span class="n">${hallCount(k)}</span></button>`).join('');
   document.getElementById('s-hall').innerHTML =
     bannerHtml()
-    + ph('🏆 討伐の<span class="em">間</span>（当選者）', `伝説のロレックスを討伐した者たちの記録　／　累計 ${WIN_HISTORY.length} 体`)
+    + ph('🏆 討伐の<span class="em">間</span>（当選者）', `伝説のロレックスを討伐した者たちの記録　／　累計 ${WIN_HISTORY.length} 体`, `<button class="btn-mini" onclick="repairWinHistory()">🛠 当選履歴を修復</button>`)
     + `<div class="filters">${tabHtml}</div>`
     + `<input id="hall-q" class="qsearch" value="${esc(hallQ)}" oninput="onHallSearch(this.value)" placeholder="🔍 当選者名で検索">`
     + `<div class="dq"><div class="dq-inner"><table>
@@ -1256,6 +1272,14 @@ function renderHallBody(){
   document.getElementById('hall-body').innerHTML=body;
 }
 function hallCount(k){ if(k==='thisweek') return winnersOfWeek(curMonth,curWeek).length; if(k==='all') return WIN_HISTORY.length; return WIN_HISTORY.filter(w=>String(w.month)===k).length; }
+// 当選履歴を週次データから復元して保存（取りこぼした当選者の修復）
+function repairWinHistory(){
+  const added=reconcileWinHistory();
+  if(added===0){ toast('当選履歴は週次データと一致しています（補完なし）'); return; }
+  if(liveData){ saveQuest(); toast(`🛠 当選履歴を ${added}件 復元・保存しました（計 ${WIN_HISTORY.length} 件）`); }
+  else { toast(`🛠 ${added}件を表示に復元しました（保存はログイン時）`); }
+  renderHall();
+}
 
 // ===== セグメント抽出（本番 index.html と同じプリセット・AND条件） =====
 let segMembers=[], _segCustomFn=null;
@@ -1501,6 +1525,7 @@ async function loadFromSupabase(){
     PAYMENTS.length=0; (pays||[]).forEach(p=>PAYMENTS.push(p));
     if(config){ curMonth=config.cur_month||curMonth; curWeek=config.cur_week||curWeek; if(config.available_months) availableMonths=config.available_months; }
     if(!availableMonths.includes(curMonth)){ availableMonths.push(curMonth); availableMonths.sort((a,b)=>a-b); }
+    reconcileWinHistory(); // 当選履歴が週次データより欠けていれば読込時に自動補完（表示を即修復）
     return true;
   }catch(err){ console.warn('Supabase読み込みエラー:',err); return false; }
 }
