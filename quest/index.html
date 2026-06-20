@@ -577,6 +577,11 @@ function winnersOfWeek(mo,wk){
 function isActiveM(m){ return calcPriority(m)==='1:アクティブ'; }
 // 名前検索（LINE名 or 氏名の部分一致・大文字小文字無視）。300名から絞り込む用。
 function matchQ(m,q){ q=(q||'').toLowerCase().trim(); if(!q) return true; return (m.line_name||'').toLowerCase().includes(q)||(m.name||'').toLowerCase().includes(q); }
+// 週次の集計（応募者数＝申込1件以上 or 申込連絡 / 結果報告数＝結果SS or 結果連絡）
+function countApplicants(mo,wk){ return MEMBERS.filter(m=>{ const w=getWk(mo,wk,m.id); return (w.apply!=null&&w.apply>=1)||!!w.restricted_applied; }).length; }
+function countResultReports(mo,wk){ return MEMBERS.filter(m=>{ const w=getWk(mo,wk,m.id); return w.result_ss===true||!!w.restricted_result; }).length; }
+// データのある「前週」を返す（週インデックス mo*10+wk が現在より小さい最大の週）。無ければ null
+function prevWeekOf(mo,wk){ const cur=mo*10+wk; let best=null; Object.keys(WEEKLY).forEach(k=>{ const p=k.split('-'); if(p.length<3) return; const idx=parseInt(p[0])*10+parseInt(p[1]); if(idx<cur&&(best===null||idx>best)) best=idx; }); return best===null?null:{mo:Math.floor(best/10),wk:best%10}; }
 // 指定した月・週に発表された当選者パネル（ダッシュボード／週次画面で共用）
 function winnersPanelHtml(mo,wk,title){
   const winners=winnersOfWeek(mo,wk);
@@ -993,6 +998,16 @@ function renderHome(){
   const totalStock=MEMBERS.reduce((s,m)=>s+Math.max(0,getStock(m.id)),0);
   const rate=active.length?Math.round(applied/active.length*100):0;
   const winners=winnersOfWeek(curMonth,curWeek);
+  // 今週のうごき（応募者数／前週比／先週の結果報告数／当選者数）
+  const apCur=countApplicants(curMonth,curWeek);
+  const prev=prevWeekOf(curMonth,curWeek);
+  const apPrev=prev?countApplicants(prev.mo,prev.wk):null;
+  const rrPrev=prev?countResultReports(prev.mo,prev.wk):null;
+  const delta=apPrev!=null?apCur-apPrev:null;
+  const deltaStr=delta==null?'—':(delta>0?'▲+'+delta:delta<0?'▼'+delta:'±0');
+  const deltaCls=delta==null?'gold':(delta>0?'green':delta<0?'red':'gold');
+  const deltaSub=prev?`前週(${prev.mo}/${prev.wk}) ${apPrev}名 → 今週 ${apCur}名`:'前週データなし';
+  const prevSub=prev?`${prev.mo}月 第${prev.wk}週`:'前週データなし';
   const rows=MEMBERS.filter(m=>!isRestricted(m))
     .sort((a,b)=>(calcPriority(a)==='1:アクティブ'?0:1)-(calcPriority(b)==='1:アクティブ'?0:1))
     .slice(0,6).map(m=>questRow(m,venue)).join('') || emptyParty();
@@ -1002,6 +1017,13 @@ function renderHome(){
     + ph('🏰 冒険者<span class="em">ギルド本部</span>', `ロレックスを求めし者たちの拠点　／　${curMonth}月 第${curWeek}週`,
         `<button class="btn btn-gold" onclick="demoWin()">✨ 当選演出を見る</button>`)
     + winnersPanelHtml(curMonth,curWeek,'🎉 今週の討伐者（当選者）')
+    + `<div style="font-size:12px;color:var(--text2);margin:2px 2px 10px;font-weight:500">📊 今週のうごき（${curMonth}月 第${curWeek}週）</div>`
+    + `<div class="grid4">
+        ${statCard('📨 今週の応募者数', apCur,'名',`${curMonth}月 第${curWeek}週`,'gold')}
+        ${statCard('📈 応募者 前週比', deltaStr,'',deltaSub,deltaCls)}
+        ${statCard('📋 先週の結果報告数', rrPrev==null?'—':rrPrev,'名',prevSub,'green')}
+        ${statCard('🏆 今週の当選者数', winners.length,'名',`${curMonth}月 第${curWeek}週`,'red')}
+      </div>`
     + `<div class="grid4">
         ${statCard('💰 未払いゴールド', totalStock.toLocaleString(),'G',`受け渡し待ち ${MEMBERS.filter(m=>getStock(m.id)>0).length}名`,'gold')}
         ${statCard('⚔ 今週の報酬発生', rewardCount,'名',`出撃5/5＋戦果報告`,'gold')}
