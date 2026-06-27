@@ -629,26 +629,58 @@ function closeModal(id){ const el=document.getElementById(id); if(el) el.classLi
 const LS_KEY='loreque_quest_autobak';
 function localSnapshot(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({MEMBERS,WEEKLY,WIN_HISTORY,PURCHASE,STORE_PURCHASES,PAYMENTS,curMonth,curWeek,availableMonths,savedAt:new Date().toISOString()})); }catch(e){} }
 function lastSnapshotTime(){ try{ const r=localStorage.getItem(LS_KEY); if(!r) return null; return (JSON.parse(r)||{}).savedAt||null; }catch(e){ return null; } }
-function saveQuest(){ if(liveData){ localSnapshot(); saveToSupabase(); } }
-function afterEdit(){ if(document.getElementById('s-weekly').classList.contains('on')) renderWeekly(); saveQuest(); }
+function saveQuest(){ localSnapshot(); } // 旧:全データ上書き。現在はローカル退避のみ（全DB上書きは復元時だけ）
+// ===== 行単位の保存（同時編集で互いの入力を消さないための targeted upsert）=====
+async function sbWeekly(mo,wk,mid){
+  if(!liveData||!supabaseClient) return;
+  const w=WEEKLY[getWkKey(mo,wk,mid)]||{};
+  const row={month:mo,week:wk,member_id:mid,apply:(w.apply==null?null:w.apply),result_ss:w.result_ss||false,won_date:w.won_date||null,won_shop:w.won_shop||null,restricted_applied:w.restricted_applied||null,restricted_result:w.restricted_result||null};
+  const {error}=await supabaseClient.from('lq_weekly_inputs').upsert(row,{onConflict:'month,week,member_id'});
+  if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+}
+async function sbMember(mid){
+  if(!liveData||!supabaseClient) return;
+  const m=MEMBERS.find(x=>x.id===mid); if(!m) return;
+  const {error}=await supabaseClient.from('lq_members').upsert(m,{onConflict:'id'});
+  if(error){ console.warn('メンバー保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+}
+// 当選履歴のみ同期（PURCHASEが配列インデックスをキーにするため id=index 方式を維持。当選操作は低頻度）
+async function sbWinSync(){
+  if(!liveData||!supabaseClient) return;
+  reconcileWinHistory();
+  try{
+    const winRows=WIN_HISTORY.map((w,i)=>({id:i,...w}));
+    if(winRows.length){ const {error}=await supabaseClient.from('lq_win_history').upsert(winRows,{onConflict:'id'}); if(error) throw error; }
+    await supabaseClient.from('lq_win_history').delete().gte('id', WIN_HISTORY.length);
+  }catch(e){ console.warn('当選履歴保存エラー',e); toast('⚠ 当選履歴の保存に失敗'); }
+}
+async function sbPayment(p){ if(!liveData||!supabaseClient||!p) return; const {error}=await supabaseClient.from('lq_reward_payments').upsert(p,{onConflict:'id'}); if(error){ console.warn(error); toast('⚠ 支払いの保存に失敗'); } }
+async function sbPurchase(idx){ if(!liveData||!supabaseClient) return; const v=PURCHASE[idx]; if(!v) return; const {error}=await supabaseClient.from('lq_purchase_results').upsert({win_idx:idx,...v},{onConflict:'win_idx'}); if(error){ console.warn(error); toast('⚠ 買付の保存に失敗'); } }
+async function sbStorePurchase(rec){ if(!liveData||!supabaseClient||!rec) return; const {error}=await supabaseClient.from('lq_store_purchases').upsert(rec,{onConflict:'id'}); if(error){ console.warn(error); toast('⚠ 店舗買付の保存に失敗'); } }
+async function sbConfig(){ if(!liveData||!supabaseClient) return; const {error}=await supabaseClient.from('lq_app_config').upsert({key:'main',cur_month:curMonth,cur_week:curWeek,available_months:availableMonths},{onConflict:'key'}); if(error){ console.warn(error); } }
+function afterEdit(mid){
+  localSnapshot();
+  if(document.getElementById('s-weekly').classList.contains('on')) renderWeekly();
+  if(mid!=null){ sbWeekly(curMonth,curWeek,mid); sbMember(mid); }
+}
 
 function ensureWk(memberId){ const key=getWkKey(curMonth,curWeek,memberId); if(!WEEKLY[key]) WEEKLY[key]={apply:null,result_ss:false,won_date:null,won_shop:null}; return key; }
 function stepApply(memberId,delta){
   const key=ensureWk(memberId);
   WEEKLY[key].apply=Math.max(0,Math.min(6,(WEEKLY[key].apply||0)+delta));
   const m=MEMBERS.find(x=>x.id===memberId); if(m&&WEEKLY[key].apply>0) m.last_active=curWeekWednesday();
-  afterEdit();
+  afterEdit(memberId);
 }
 function setApply(memberId,val){
   const key=ensureWk(memberId); const v=parseInt(val);
   WEEKLY[key].apply=isNaN(v)?null:Math.max(0,Math.min(6,v));
   const m=MEMBERS.find(x=>x.id===memberId); if(m&&!isNaN(v)&&v>0) m.last_active=curWeekWednesday();
-  afterEdit();
+  afterEdit(memberId);
 }
 function setResult(memberId,val){
   const key=ensureWk(memberId); WEEKLY[key].result_ss=val;
   if(val){ const m=MEMBERS.find(x=>x.id===memberId); if(m) m.last_active=curWeekWednesday(); toast('✓ 結果SSを確認済みにしました'); }
-  afterEdit();
+  afterEdit(memberId);
 }
 function openWonModal(memberId){
   const m=MEMBERS.find(x=>x.id===memberId); if(!m) return; wonTarget=memberId; wonCompanion=false;
@@ -680,7 +712,7 @@ function confirmWon(){
   closeModal('modal-won');
   toast(isComp?`📩 ${m.name||m.line_name} さんの当選連絡を記録しました（同行補助）`:`🏆 ${m.name||m.line_name} さんの当選を登録しました！`);
   const stock=getStock(m.id); if(stock>0) setTimeout(()=>toast(`💰 ストック残 ¥${stock.toLocaleString()} — ゴールド管理から受け渡し登録を`),2400);
-  wonCompanion=false; wonTarget=null; afterEdit();
+  const _t=wonTarget; wonCompanion=false; wonTarget=null; afterEdit(_t); sbWinSync();
 }
 function clearWon(memberId){
   if(!confirm('当選登録を取り消しますか？')) return;
@@ -690,14 +722,14 @@ function clearWon(memberId){
   if(idx>=0) WIN_HISTORY.splice(idx,1);
   const m=MEMBERS.find(x=>x.id===memberId);
   if(m){ if(m.won2){ m.won2=null; m.status='1回当選済'; } else if(m.won1){ m.won1=null; m.status='未当選'; } }
-  toast('当選登録を取り消しました'); afterEdit();
+  toast('当選登録を取り消しました'); afterEdit(memberId); sbWinSync();
 }
 // 制限中メンバー：落選連絡（restricted_result はトグル文字列 'ok'）
 function setRestrictedResult(memberId,val){
   const key=ensureWk(memberId);
   WEEKLY[key].restricted_result = WEEKLY[key].restricted_result===val ? '' : val;
   if(WEEKLY[key].restricted_result==='ok'){ const m=MEMBERS.find(x=>x.id===memberId); if(m) m.last_active=curWeekWednesday(); toast('落選を記録しました'); }
-  afterEdit();
+  afterEdit(memberId);
 }
 // 制限中メンバー：当選連絡＝同行補助モードで当選登録モーダルを開く
 function openWonModalRestricted(memberId){
@@ -735,14 +767,15 @@ function saveEditWonDate(){
     m.won1=allWins[0]?allWins[0].won_date:null; m.won2=allWins[1]?allWins[1].won_date:null; m.won3=allWins[2]?allWins[2].won_date:null;
     m.last_active=newDate;
   }
-  closeModal('modal-edit-won-date'); toast(`✓ 当選日を ${fmtDate(newDate)} に修正しました`); saveQuest();
+  closeModal('modal-edit-won-date'); toast(`✓ 当選日を ${fmtDate(newDate)} に修正しました`);
+  localSnapshot(); sbWeekly(mo,wk,memberId); sbMember(memberId); sbWinSync();
   if(document.getElementById('s-hall').classList.contains('on')) renderHall();
   else if(document.getElementById('s-weekly').classList.contains('on')) renderWeekly();
 }
 
 // ===== メンバー 追加 / 編集 / 削除 =====
 function afterMemberEdit(){
-  saveQuest();
+  localSnapshot();
   if(document.getElementById('s-segment').classList.contains('on')) runSegment();
   else renderParty();
 }
@@ -756,7 +789,7 @@ function addMember(){
     won1:null,won2:null,won3:null,last_active:null,total_reward:0, no_purchase:false,
     note:document.getElementById('new-note').value.trim(), line_user_id:document.getElementById('new-line-uid').value.trim()||'' });
   ['new-line-name','new-name','new-note','new-line-uid'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
-  closeModal('modal-add-member'); toast('✓ メンバーを追加しました'); afterMemberEdit();
+  closeModal('modal-add-member'); toast('✓ メンバーを追加しました'); sbMember(maxId+1); afterMemberEdit();
 }
 function openEditMember(id){
   const m=MEMBERS.find(x=>x.id===id); if(!m) return;
@@ -792,7 +825,7 @@ function saveEditMember(){
   const spd=document.getElementById('edit-store-purchase').value.trim().replace(/[^0-9]/g,'');
   m.store_purchase_date=spd||null;
   m.no_purchase=document.getElementById('edit-no-purchase').checked||false;
-  closeModal('modal-edit-member'); toast(`✓ ${m.name||m.line_name} の情報を更新しました`); afterMemberEdit();
+  closeModal('modal-edit-member'); toast(`✓ ${m.name||m.line_name} の情報を更新しました`); sbMember(id); afterMemberEdit();
 }
 function confirmDeleteMember(){
   const id=parseInt(document.getElementById('edit-member-id').value);
@@ -830,7 +863,7 @@ function savePayment(){
   PAYMENTS.push({id:newId,member_id:memberId,amount,paid_date:paidDate,note});
   closeModal('modal-payment');
   toast(`💴 ${m.name||m.line_name} さんへ ¥${amount.toLocaleString()} を登録しました`);
-  saveQuest(); renderGold();
+  sbPayment(PAYMENTS[PAYMENTS.length-1]); localSnapshot(); renderGold();
 }
 function deletePayment(id){
   const p=PAYMENTS.find(x=>x.id===id); if(!p) return;
@@ -839,7 +872,7 @@ function deletePayment(id){
   const idx=PAYMENTS.findIndex(x=>x.id===id); if(idx>=0) PAYMENTS.splice(idx,1);
   if(liveData && supabaseClient) supabaseClient.from('lq_reward_payments').delete().eq('id',id).then(()=>{});
   toast('支払いを取り消しました（ストックに戻りました）');
-  saveQuest(); renderGold();
+  localSnapshot(); renderGold();
 }
 function renderPaymentHistory(){
   const tbody=document.getElementById('payment-history-body'); if(!tbody) return;
@@ -873,7 +906,7 @@ function addMonthQuest(){
   const next=Math.max(...availableMonths)+1;
   if(next>12){ toast('⚠ 12月以降は追加できません'); return; }
   if(!availableMonths.includes(next)){ availableMonths.push(next); availableMonths.sort((a,b)=>a-b); }
-  curMonth=next; saveQuest(); renderWeekly(); toast(`✓ ${next}月を追加しました`);
+  curMonth=next; sbConfig(); localSnapshot(); renderWeekly(); toast(`✓ ${next}月を追加しました`);
 }
 // ===== 購入管理・店舗買付 =====
 function renderPurchase(){
@@ -926,7 +959,8 @@ function savePurchase(){
   const restriction_memo=document.getElementById('pur-rmemo').value.trim();
   PURCHASE[idx]={result,purchase_date,units,companion,companion_result,companion_units,note,restriction_memo};
   if(result==='success'){ const win=WIN_HISTORY[idx]; if(win){ const m=MEMBERS.find(x=>x.id===win.member_id); if(m){ const pd=purchase_date||today(); if(!m.store_purchase_date||pd>String(m.store_purchase_date).replace(/[^0-9]/g,'')) m.store_purchase_date=pd; } } }
-  closeModal('modal-purchase'); toast(result==='success'?'✓ 買付成功を登録（購入制限を開始）':'買付結果を登録しました'); saveQuest(); renderPurchase();
+  closeModal('modal-purchase'); toast(result==='success'?'✓ 買付成功を登録（購入制限を開始）':'買付結果を登録しました');
+  sbPurchase(idx); const _w=WIN_HISTORY[idx]; if(result==='success'&&_w) sbMember(_w.member_id); localSnapshot(); renderPurchase();
 }
 function openStorePurchaseModal(){
   ['sp-member-name','sp-purchase-date','sp-companion','sp-note','sp-shop-input'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -948,14 +982,14 @@ function saveStorePurchase(){
   STORE_PURCHASES.unshift({ id:Date.now(), member_id:m?m.id:null, line_name:lineName, name:m?(m.name||''):'', purchase_date:purchaseDate, shop, result, units, companion, note });
   if(result==='success'&&m){ const ex=m.store_purchase_date?String(m.store_purchase_date).replace(/[^0-9]/g,''):''; if(!ex||purchaseDate>ex) m.store_purchase_date=purchaseDate; toast(`✓ ${m.name||lineName} の店舗買付成功を登録（制限開始）`); }
   else toast('✓ 店舗買付記録を保存しました');
-  closeModal('modal-store-purchase'); saveQuest(); renderPurchase();
+  closeModal('modal-store-purchase'); sbStorePurchase(STORE_PURCHASES[0]); if(result==='success'&&m) sbMember(m.id); localSnapshot(); renderPurchase();
 }
 function deleteStorePurchase(idx){
   const p=STORE_PURCHASES[idx]; if(!p) return;
   if(!confirm(`${p.name||p.line_name}（${fmtDate(p.purchase_date)}）の記録を削除しますか？`)) return;
   STORE_PURCHASES.splice(idx,1);
   if(liveData && supabaseClient) supabaseClient.from('lq_store_purchases').delete().eq('id',p.id).then(()=>{});
-  toast('店舗買付記録を削除しました'); saveQuest(); renderPurchase();
+  toast('店舗買付記録を削除しました'); localSnapshot(); renderPurchase();
 }
 // Supabase 全保存（本番 index.html と同一ロジック）。成否を true/false で返す。
 async function saveToSupabase(){
@@ -1276,7 +1310,7 @@ function hallCount(k){ if(k==='thisweek') return winnersOfWeek(curMonth,curWeek)
 function repairWinHistory(){
   const added=reconcileWinHistory();
   if(added===0){ toast('当選履歴は週次データと一致しています（補完なし）'); return; }
-  if(liveData){ saveQuest(); toast(`🛠 当選履歴を ${added}件 復元・保存しました（計 ${WIN_HISTORY.length} 件）`); }
+  if(liveData){ sbWinSync(); toast(`🛠 当選履歴を ${added}件 復元・保存しました（計 ${WIN_HISTORY.length} 件）`); }
   else { toast(`🛠 ${added}件を表示に復元しました（保存はログイン時）`); }
   renderHall();
 }
@@ -1478,8 +1512,8 @@ function restoreToSupabase(input){
 
 function emptyParty(plain){ const inner=`<div class="big">👋</div>まだ仲間がいません。<br><span style="font-size:12px">下のボタンから最初の冒険者を登録できます。</span><br><button class="btn btn-gold" style="margin-top:14px" onclick="openAddMember()">＋ メンバーを追加</button>`; return `<div class="empty">${inner}</div>`; }
 
-function setMonth(mo){ curMonth=mo; renderWeekly(); }
-function setWeek(wk){ curWeek=wk; renderWeekly(); }
+function setMonth(mo){ curMonth=mo; sbConfig(); renderWeekly(); }
+function setWeek(wk){ curWeek=wk; sbConfig(); renderWeekly(); }
 function setWeeklyFilter(k){ weeklyFilter=k; renderWeekly(); }
 function setPartyFilter(k){ partyFilter=k; renderParty(); }
 function setHallFilter(k){ hallFilter=k; renderHall(); }
