@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260631; // デプロイのたびに増やす
+const APP_VERSION = 20260632; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -677,11 +677,13 @@ function lastSnapshotTime(){ try{ const r=localStorage.getItem(LS_KEY); if(!r) r
 function saveQuest(){ localSnapshot(); } // 旧:全データ上書き。現在はローカル退避のみ（全DB上書きは復元時だけ）
 // ===== 行単位の保存（同時編集で互いの入力を消さないための targeted upsert）=====
 async function sbWeekly(mo,wk,mid){
-  if(!liveData||!supabaseClient) return;
+  if(!supabaseClient){ toast('⚠ 未接続のため保存されません'); return; }
+  if(!liveData){ toast('⚠ 保存されていません（閲覧のみ状態）'); return; } // ← 診断: liveData=false なら保存がスキップされている
   const w=WEEKLY[getWkKey(mo,wk,mid)]||{};
   const row={month:mo,week:wk,member_id:mid,apply:(w.apply==null?null:w.apply),result_ss:w.result_ss||false,won_date:w.won_date||null,won_shop:w.won_shop||null,restricted_applied:w.restricted_applied||null,restricted_result:w.restricted_result||null};
   const {error}=await supabaseClient.from('lq_weekly_inputs').upsert(row,{onConflict:'month,week,member_id'});
-  if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+  if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗: '+(error.message||error.code||'不明')); }
+  else { toast('☁ 保存OK '+mo+'月'+wk+'週'); } // ← 診断: 保存できたか可視化（後で消します）
 }
 async function sbMember(mid){
   if(!liveData||!supabaseClient) return;
