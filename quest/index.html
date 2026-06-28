@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260634; // デプロイのたびに増やす
+const APP_VERSION = 20260635; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -525,7 +525,7 @@ async function checkGuard(){
   }catch(e){}
 }
 // ===== リアルタイム同期（他スタッフの入力を全員の画面へ即反映）=====
-let rtChannel=null, rtTimer=null, lastLocalEdit=0;
+let rtChannel=null, rtTimer=null, lastLocalEdit=0, pendingSaves=0;
 function startRealtime(){
   if(!supabaseClient || !liveData || rtChannel) return;
   rtChannel = supabaseClient.channel('loreque-rt');
@@ -537,7 +537,7 @@ function startRealtime(){
 function scheduleRtSync(){ clearTimeout(rtTimer); rtTimer=setTimeout(rtSync, 1800); }
 async function rtSync(){
   if(!liveData || staleCode) return;
-  if(Date.now()-lastLocalEdit < 4000){ scheduleRtSync(); return; } // 直前に自分が入力した→保存確定まで再取得を待つ（入力が消えて見えるのを防止）
+  if(pendingSaves>0 || Date.now()-lastLocalEdit < 4000){ scheduleRtSync(); return; } // 自分の保存が未完了 or 直前に入力→保存確定まで再取得を待つ（入力が消えて見えるのを防止）
   const ae=document.activeElement;
   const typing = ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');
   const modalOpen = document.querySelector('.modal-ov.show, .ov.show');
@@ -686,24 +686,32 @@ async function sbWeekly(mo,wk,mid){
   if(!liveData||!supabaseClient) return;
   const w=WEEKLY[getWkKey(mo,wk,mid)]||{};
   const row={month:mo,week:wk,member_id:mid,apply:(w.apply==null?null:w.apply),result_ss:w.result_ss||false,won_date:w.won_date||null,won_shop:w.won_shop||null,restricted_applied:w.restricted_applied||null,restricted_result:w.restricted_result||null};
-  const {error}=await supabaseClient.from('lq_weekly_inputs').upsert(row,{onConflict:'month,week,member_id'});
-  if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+  pendingSaves++;
+  try{
+    const {error}=await supabaseClient.from('lq_weekly_inputs').upsert(row,{onConflict:'month,week,member_id'});
+    if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+  }finally{ pendingSaves=Math.max(0,pendingSaves-1); lastLocalEdit=Date.now(); }
 }
 async function sbMember(mid){
   if(!liveData||!supabaseClient) return;
   const m=MEMBERS.find(x=>x.id===mid); if(!m) return;
-  const {error}=await supabaseClient.from('lq_members').upsert(m,{onConflict:'id'});
-  if(error){ console.warn('メンバー保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+  pendingSaves++;
+  try{
+    const {error}=await supabaseClient.from('lq_members').upsert(m,{onConflict:'id'});
+    if(error){ console.warn('メンバー保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
+  }finally{ pendingSaves=Math.max(0,pendingSaves-1); lastLocalEdit=Date.now(); }
 }
 // 当選履歴のみ同期（PURCHASEが配列インデックスをキーにするため id=index 方式を維持。当選操作は低頻度）
 async function sbWinSync(){
   if(!liveData||!supabaseClient) return;
   reconcileWinHistory();
+  pendingSaves++;
   try{
     const winRows=WIN_HISTORY.map((w,i)=>({id:i,...w}));
     if(winRows.length){ const {error}=await supabaseClient.from('lq_win_history').upsert(winRows,{onConflict:'id'}); if(error) throw error; }
     await supabaseClient.from('lq_win_history').delete().gte('id', WIN_HISTORY.length);
   }catch(e){ console.warn('当選履歴保存エラー',e); toast('⚠ 当選履歴の保存に失敗'); }
+  finally{ pendingSaves=Math.max(0,pendingSaves-1); lastLocalEdit=Date.now(); }
 }
 async function sbPayment(p){ if(!liveData||!supabaseClient||!p) return; const {error}=await supabaseClient.from('lq_reward_payments').upsert(p,{onConflict:'id'}); if(error){ console.warn(error); toast('⚠ 支払いの保存に失敗'); } }
 async function sbPurchase(idx){ if(!liveData||!supabaseClient) return; const v=PURCHASE[idx]; if(!v) return; const {error}=await supabaseClient.from('lq_purchase_results').upsert({win_idx:idx,...v},{onConflict:'win_idx'}); if(error){ console.warn(error); toast('⚠ 買付の保存に失敗'); } }
@@ -1682,7 +1690,7 @@ async function init(){
   hallFilter='thisweek'; go('home');
   if(liveData){ localSnapshot(); setInterval(()=>{ if(liveData) localSnapshot(); }, 1800000); } // 30分ごと静かにローカル退避
   checkGuard(); setInterval(checkGuard, 30000); // バージョンガード（古いタブの上書き防止）
-  // startRealtime(); // ← リアルタイム同期は一時停止（入力が消える不具合の切り分けのため。安全な方式で作り直し中）
+  startRealtime(); // リアルタイム同期: 他スタッフの入力を全員の画面へ即反映（保存中・入力中は再取得を保留して入力消えを防止）
   const av=document.getElementById('app-ver'); if(av) av.textContent='v'+APP_VERSION;
 }
 init();
