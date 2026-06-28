@@ -504,6 +504,26 @@ const SUPABASE_URL = 'https://ixwrecvoqvuzzvxsafvw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4d3JlY3ZvcXZ1enp2eHNhZnZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MTMwNjYsImV4cCI6MjA5MDE4OTA2Nn0.UCCEzORa6RhR0sNyXvqv4P8nEeoVF20r3f8oTyO7Xok';
 let supabaseClient = null;
 const STD_VENUE = 5;
+// ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
+const APP_VERSION = 20260628; // デプロイのたびに増やす
+let staleCode = false;
+function showStaleBanner(){
+  if(document.getElementById('stale-banner')) return;
+  const d=document.createElement('div'); d.id='stale-banner';
+  d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:12px 14px;text-align:center;font-weight:700;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.35)';
+  d.innerHTML='⚠ 新しいバージョンが公開されています。このタブは古いため、データを守るために保存を停止しました。 <button onclick="location.reload()" style="margin-left:8px;padding:5px 14px;border:none;border-radius:6px;background:#fff;color:#c0392b;font-weight:700;cursor:pointer">今すぐ再読み込み</button>';
+  document.body.appendChild(d);
+}
+async function checkGuard(){
+  if(!supabaseClient) return;
+  try{
+    const {data,error}=await supabaseClient.from('lq_app_config').select('cur_month').eq('key','__guard__').maybeSingle();
+    if(error) return; // 通信エラー時はブロックしない（誤って正常タブを止めない）
+    const dbv=(data&&data.cur_month)||0;
+    if(dbv>APP_VERSION){ staleCode=true; liveData=false; showStaleBanner(); updateRwStatus(); }
+    else if(dbv<APP_VERSION){ await supabaseClient.from('lq_app_config').upsert({key:'__guard__',cur_month:APP_VERSION},{onConflict:'key'}); }
+  }catch(e){}
+}
 
 // ================================================================
 // データ（本番と同じ構造）
@@ -1618,6 +1638,7 @@ async function init(){
   toast(ok?'☁ Supabaseから実データを読み込みました（入力は自動保存されます）':'データ読み込みに失敗（権限/通信を確認）');
   hallFilter='thisweek'; go('home');
   if(liveData){ localSnapshot(); setInterval(()=>{ if(liveData) localSnapshot(); }, 1800000); } // 30分ごと静かにローカル退避
+  checkGuard(); setInterval(checkGuard, 30000); // バージョンガード（古いタブの上書き防止）
 }
 init();
 </script>
