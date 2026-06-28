@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260633; // デプロイのたびに増やす
+const APP_VERSION = 20260634; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -641,7 +641,13 @@ function matchQ(m,q){ q=(q||'').toLowerCase().trim(); if(!q) return true; return
 function countApplicants(mo,wk){ return MEMBERS.filter(m=>{ const w=getWk(mo,wk,m.id); return (w.apply!=null&&w.apply>=1)||!!w.restricted_applied; }).length; }
 function countResultReports(mo,wk){ return MEMBERS.filter(m=>{ const w=getWk(mo,wk,m.id); return w.result_ss===true||!!w.restricted_result; }).length; }
 // データのある「前週」を返す（週インデックス mo*10+wk が現在より小さい最大の週）。無ければ null
-function prevWeekOf(mo,wk){ const cur=mo*10+wk; let best=null; Object.keys(WEEKLY).forEach(k=>{ const p=k.split('-'); if(p.length<3) return; const idx=parseInt(p[0])*10+parseInt(p[1]); if(idx<cur&&(best===null||idx>best)) best=idx; }); return best===null?null:{mo:Math.floor(best/10),wk:best%10}; }
+// 「前週」＝申込者がいた直近の過去週（空の週は自動スキップ。例: 7月1週で6月5週が空なら6月4週と比較）
+function prevWeekOf(mo,wk){
+  const cur=mo*10+wk; const weeks=new Set();
+  Object.keys(WEEKLY).forEach(k=>{ const p=k.split('-'); if(p.length<3) return; const v=WEEKLY[k]; if(!v) return; if((v.apply!=null&&v.apply>=1)||v.restricted_applied) weeks.add(parseInt(p[0])*10+parseInt(p[1])); });
+  let best=null; weeks.forEach(idx=>{ if(idx<cur && (best===null||idx>best)) best=idx; });
+  return best===null?null:{mo:Math.floor(best/10),wk:best%10};
+}
 // 指定した月・週に発表された当選者パネル（ダッシュボード／週次画面で共用）
 function winnersPanelHtml(mo,wk,title){
   const winners=winnersOfWeek(mo,wk);
