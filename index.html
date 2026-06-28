@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260629; // デプロイのたびに増やす
+const APP_VERSION = 20260630; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -525,7 +525,7 @@ async function checkGuard(){
   }catch(e){}
 }
 // ===== リアルタイム同期（他スタッフの入力を全員の画面へ即反映）=====
-let rtChannel=null, rtTimer=null;
+let rtChannel=null, rtTimer=null, lastLocalEdit=0;
 function startRealtime(){
   if(!supabaseClient || !liveData || rtChannel) return;
   rtChannel = supabaseClient.channel('loreque-rt');
@@ -537,6 +537,7 @@ function startRealtime(){
 function scheduleRtSync(){ clearTimeout(rtTimer); rtTimer=setTimeout(rtSync, 1800); }
 async function rtSync(){
   if(!liveData || staleCode) return;
+  if(Date.now()-lastLocalEdit < 4000){ scheduleRtSync(); return; } // 直前に自分が入力した→保存確定まで再取得を待つ（入力が消えて見えるのを防止）
   const ae=document.activeElement;
   const typing = ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');
   const modalOpen = document.querySelector('.modal-ov.show, .ov.show');
@@ -671,7 +672,7 @@ function getSelectedWeekWednesday(month,weekNum){
 function curWeekWednesday(){ const t=thisWeekWednesday(),s=getSelectedWeekWednesday(curMonth,curWeek); return s<=t?s:t; }
 function closeModal(id){ const el=document.getElementById(id); if(el) el.classList.remove('show'); }
 const LS_KEY='loreque_quest_autobak';
-function localSnapshot(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({MEMBERS,WEEKLY,WIN_HISTORY,PURCHASE,STORE_PURCHASES,PAYMENTS,curMonth,curWeek,availableMonths,savedAt:new Date().toISOString()})); }catch(e){} }
+function localSnapshot(){ lastLocalEdit=Date.now(); try{ localStorage.setItem(LS_KEY, JSON.stringify({MEMBERS,WEEKLY,WIN_HISTORY,PURCHASE,STORE_PURCHASES,PAYMENTS,curMonth,curWeek,availableMonths,savedAt:new Date().toISOString()})); }catch(e){} }
 function lastSnapshotTime(){ try{ const r=localStorage.getItem(LS_KEY); if(!r) return null; return (JSON.parse(r)||{}).savedAt||null; }catch(e){ return null; } }
 function saveQuest(){ localSnapshot(); } // 旧:全データ上書き。現在はローカル退避のみ（全DB上書きは復元時だけ）
 // ===== 行単位の保存（同時編集で互いの入力を消さないための targeted upsert）=====
