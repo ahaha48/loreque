@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260632; // デプロイのたびに増やす
+const APP_VERSION = 20260633; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -677,13 +677,11 @@ function lastSnapshotTime(){ try{ const r=localStorage.getItem(LS_KEY); if(!r) r
 function saveQuest(){ localSnapshot(); } // 旧:全データ上書き。現在はローカル退避のみ（全DB上書きは復元時だけ）
 // ===== 行単位の保存（同時編集で互いの入力を消さないための targeted upsert）=====
 async function sbWeekly(mo,wk,mid){
-  if(!supabaseClient){ toast('⚠ 未接続のため保存されません'); return; }
-  if(!liveData){ toast('⚠ 保存されていません（閲覧のみ状態）'); return; } // ← 診断: liveData=false なら保存がスキップされている
+  if(!liveData||!supabaseClient) return;
   const w=WEEKLY[getWkKey(mo,wk,mid)]||{};
   const row={month:mo,week:wk,member_id:mid,apply:(w.apply==null?null:w.apply),result_ss:w.result_ss||false,won_date:w.won_date||null,won_shop:w.won_shop||null,restricted_applied:w.restricted_applied||null,restricted_result:w.restricted_result||null};
   const {error}=await supabaseClient.from('lq_weekly_inputs').upsert(row,{onConflict:'month,week,member_id'});
-  if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗: '+(error.message||error.code||'不明')); }
-  else { toast('☁ 保存OK '+mo+'月'+wk+'週'); } // ← 診断: 保存できたか可視化（後で消します）
+  if(error){ console.warn('週次保存エラー',error); toast('⚠ 保存に失敗（通信/権限を確認）'); }
 }
 async function sbMember(mid){
   if(!liveData||!supabaseClient) return;
@@ -1583,19 +1581,31 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 // ================================================================
 // Supabase 読み込み（読み取り専用）／認証
 // ================================================================
+// 全件をページ分割で取得（Supabaseは1リクエスト最大1000件のため）
+async function sbFetchAll(table, orderCols){
+  const out=[]; const size=1000; let from=0;
+  while(true){
+    let q=supabaseClient.from(table).select('*');
+    (orderCols||[]).forEach(c=>{ q=q.order(c); });
+    q=q.range(from, from+size-1);
+    const {data,error}=await q;
+    if(error) throw error;
+    out.push(...(data||[]));
+    if(!data || data.length<size) break;
+    from+=size;
+  }
+  return out;
+}
 async function loadFromSupabase(){
   if(!supabaseClient) return false;
   try{
-    const [{data:members,error:er1},{data:weekly},{data:wins},{data:purchases},{data:stores},{data:pays},{data:config}] = await Promise.all([
-      supabaseClient.from('lq_members').select('*').order('id'),
-      supabaseClient.from('lq_weekly_inputs').select('*'),
-      supabaseClient.from('lq_win_history').select('*').order('id'),
-      supabaseClient.from('lq_purchase_results').select('*'),
-      supabaseClient.from('lq_store_purchases').select('*').order('id'),
-      supabaseClient.from('lq_reward_payments').select('*').order('id'),
-      supabaseClient.from('lq_app_config').select('*').eq('key','main').single()
-    ]);
-    if(er1) return false;
+    const members  = await sbFetchAll('lq_members',['id']);
+    const weekly   = await sbFetchAll('lq_weekly_inputs',['month','week','member_id']); // 1000件超でも全件
+    const wins     = await sbFetchAll('lq_win_history',['id']);
+    const purchases= await sbFetchAll('lq_purchase_results',['win_idx']);
+    const stores   = await sbFetchAll('lq_store_purchases',['id']);
+    const pays     = await sbFetchAll('lq_reward_payments',['id']);
+    const {data:config} = await supabaseClient.from('lq_app_config').select('*').eq('key','main').maybeSingle();
     MEMBERS.length=0; (members||[]).forEach(m=>MEMBERS.push(m));
     Object.keys(WEEKLY).forEach(k=>delete WEEKLY[k]);
     (weekly||[]).forEach(row=>{ WEEKLY[`${row.month}-${row.week}-${row.member_id}`]={apply:row.apply,result_ss:row.result_ss,won_date:row.won_date,won_shop:row.won_shop,restricted_applied:row.restricted_applied,restricted_result:row.restricted_result}; });
