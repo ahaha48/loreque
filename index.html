@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260628; // デプロイのたびに増やす
+const APP_VERSION = 20260629; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -523,6 +523,30 @@ async function checkGuard(){
     if(dbv>APP_VERSION){ staleCode=true; liveData=false; showStaleBanner(); updateRwStatus(); }
     else if(dbv<APP_VERSION){ await supabaseClient.from('lq_app_config').upsert({key:'__guard__',cur_month:APP_VERSION},{onConflict:'key'}); }
   }catch(e){}
+}
+// ===== リアルタイム同期（他スタッフの入力を全員の画面へ即反映）=====
+let rtChannel=null, rtTimer=null;
+function startRealtime(){
+  if(!supabaseClient || !liveData || rtChannel) return;
+  rtChannel = supabaseClient.channel('loreque-rt');
+  ['lq_weekly_inputs','lq_members','lq_win_history','lq_reward_payments','lq_purchase_results','lq_store_purchases'].forEach(t=>{
+    rtChannel.on('postgres_changes',{event:'*',schema:'public',table:t}, scheduleRtSync);
+  });
+  rtChannel.subscribe(status=>{ if(status==='SUBSCRIBED') toast('🟢 リアルタイム同期を開始しました'); });
+}
+function scheduleRtSync(){ clearTimeout(rtTimer); rtTimer=setTimeout(rtSync, 1800); }
+async function rtSync(){
+  if(!liveData || staleCode) return;
+  const ae=document.activeElement;
+  const typing = ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');
+  const modalOpen = document.querySelector('.modal-ov.show, .ov.show');
+  if(typing || modalOpen){ scheduleRtSync(); return; } // 入力中/モーダル中は反映を保留（操作を邪魔しない）
+  const sM=curMonth,sW=curWeek,sHall=hallFilter,sPF=partyFilter,sWF=weeklyFilter,sPQ=partyQ,sWQ=weeklyQ,sGQ=goldQ,sHQ=hallQ;
+  const ok=await loadFromSupabase();
+  if(!ok) return;
+  curMonth=sM;curWeek=sW;hallFilter=sHall;partyFilter=sPF;weeklyFilter=sWF;partyQ=sPQ;weeklyQ=sWQ;goldQ=sGQ;hallQ=sHQ; // 自分の表示状態は維持
+  const active=document.querySelector('.nav-item.active')?.dataset.s || 'home';
+  (RENDER[active]||renderHome)();
 }
 
 // ================================================================
@@ -1639,6 +1663,7 @@ async function init(){
   hallFilter='thisweek'; go('home');
   if(liveData){ localSnapshot(); setInterval(()=>{ if(liveData) localSnapshot(); }, 1800000); } // 30分ごと静かにローカル退避
   checkGuard(); setInterval(checkGuard, 30000); // バージョンガード（古いタブの上書き防止）
+  startRealtime(); // リアルタイム同期（他スタッフの入力を即反映）
 }
 init();
 </script>
