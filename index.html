@@ -329,7 +329,7 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
     </nav>
     <div class="sidebar-footer">
       <span class="em" id="user-email"></span>
-      <span class="sb-link" onclick="signOut()">ログアウト</span>　·　<span id="rw-status" style="color:var(--text3)">—</span>
+      <span class="sb-link" onclick="signOut()">ログアウト</span>　·　<span id="rw-status" style="color:var(--text3)">—</span>　·　<span id="app-ver" style="color:var(--text3);font-size:10px"></span>
     </div>
   </aside>
 
@@ -505,7 +505,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 const STD_VENUE = 5;
 // ===== バージョンガード（古いタブが新版デプロイ後に上書きするのを防ぐ＝楽観ロック）=====
-const APP_VERSION = 20260630; // デプロイのたびに増やす
+const APP_VERSION = 20260631; // デプロイのたびに増やす
 let staleCode = false;
 function showStaleBanner(){
   if(document.getElementById('stale-banner')) return;
@@ -1664,7 +1664,8 @@ async function init(){
   hallFilter='thisweek'; go('home');
   if(liveData){ localSnapshot(); setInterval(()=>{ if(liveData) localSnapshot(); }, 1800000); } // 30分ごと静かにローカル退避
   checkGuard(); setInterval(checkGuard, 30000); // バージョンガード（古いタブの上書き防止）
-  startRealtime(); // リアルタイム同期（他スタッフの入力を即反映）
+  // startRealtime(); // ← リアルタイム同期は一時停止（入力が消える不具合の切り分けのため。安全な方式で作り直し中）
+  const av=document.getElementById('app-ver'); if(av) av.textContent='v'+APP_VERSION;
 }
 init();
 </script>
